@@ -1,0 +1,17 @@
+  /* ===== ฟังชั่นเสริม + ตัวแก้กรอบตา ===== */
+  .checks{display:flex;flex-wrap:wrap;gap:8px 20px;margin:12px 0 4px}
+  .chk{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin:0;cursor:pointer}
+  .chk input{width:20px;height:20px;accent-color:var(--gold)}
+  .chk.off{opacity:.4}
+  .eyeBox{margin-top:14px;padding:12px;border:1px solid var(--lineDim);border-radius:4px;background:var(--win2)}
+  .eyeTools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+  .eyeTools .btn.on{border-color:var(--gold);color:var(--gold)}
+  .eyeWrap{display:flex;justify-content:center;background:repeating-conic-gradient(#16204a 0% 25%,#101836 0% 50%) 50%/16px 16px;border-radius:3px;padding:6px}
+  #eyeCv{width:100%;max-width:420px;image-rendering:pixelated;touch-action:none;cursor:crosshair}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--dim);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .parts{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+  .chk.small{font-size:14px;gap:6px}
+  .chk.small input{width:17px;height:17px}
+  .needbb{margin-top:8px;padding:8px 10px;border-radius:3px;background:rgba(255,122,147,.08);border-left:3px solid var(--bad);color:#FFC2CE;font-size:14px;line-height:1.55}
+  .needbb b{color:#fff}

@@ -1,0 +1,48 @@
+
+  /* ===== โลโก้ ISEKAI: โฮโลแกรม + ป้ายเหลือง + กลิตช์สลับฟอนต์ =====
+     --u = 1 หน่วยออกแบบ (1px บนจอกว้าง, ย่อลงตามจอมือถือ) ทุกขนาดในโลโก้คูณจากตัวนี้ */
+  .logo{--u:min(1px,(100vw - 40px) / 760);margin:0;display:flex;flex-direction:column;align-items:center;gap:calc(4 * var(--u));
+        width:calc(760 * var(--u));font-weight:400}
+  .lgBox{position:relative;display:block;width:100%;height:calc(200 * var(--u));transition:opacity .05s}
+  .lgBk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:900 calc(140 * var(--u))/1 "Noto Sans JP",sans-serif;
+        color:transparent;-webkit-text-stroke:1.2px rgba(255,0,170,.38);letter-spacing:-.03em;user-select:none}
+  .lgBox .L{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1}
+  /* เส้นสแกนกับแถบแสงวิ่ง "อยู่ในตัวหนังสือเท่านั้น" (background-clip:text)
+     จะได้ไม่มีกล่องดำหรือเส้นฟ้าโผล่ในที่ว่างแล้วตัดจบดื้อ ๆ */
+  .lgBox .mg,.lgBox .cy{color:transparent;-webkit-background-clip:text;background-clip:text;mix-blend-mode:screen}
+  .lgBox .mg{background-image:repeating-linear-gradient(0deg,#FF2BD6 0 2px,rgba(255,43,214,.5) 2px 4px);
+     animation:chromaL 2s ease-in-out infinite}
+  .lgBox .cy{background-image:
+       linear-gradient(180deg,transparent 0 44%,rgba(255,255,255,.95) 50%,transparent 56%),
+       repeating-linear-gradient(0deg,#5FF6FF 0 2px,rgba(95,246,255,.5) 2px 4px);
+     background-size:100% 300%,auto;background-repeat:no-repeat,repeat;
+     animation:chromaR 2s ease-in-out infinite,lgSweep 4s linear infinite}
+  @keyframes lgSweep{from{background-position:0 100%,0 0}to{background-position:0 0,0 0}}
+  @keyframes chromaL{0%,100%{transform:translateX(calc(-1 * var(--u)))}50%{transform:translateX(calc(-5 * var(--u)))}}
+  @keyframes chromaR{0%,100%{transform:translateX(var(--u))}50%{transform:translateX(calc(5 * var(--u)))}}
+  .lgBox .wt{opacity:0}
+  .lgNz{position:absolute;inset:0;pointer-events:none}
+  .lgNz i{position:absolute;height:calc(8 * var(--u));opacity:.75;display:none}
+  .lgChip{position:absolute;background:#5FF6FF;mix-blend-mode:screen;display:none}
+
+  /* ฟอนต์ 4 แบบ สลับกันทุกครั้งที่กลิตช์ */
+  .lgBox.f1 .L{font:italic 900 calc(128 * var(--u)) "Tourney",var(--disp);letter-spacing:.03em}
+  .lgBox.f2 .L{font:400 calc(150 * var(--u)) "Saira Stencil One",var(--disp);letter-spacing:.04em}
+  .lgBox.f3 .L{font:900 calc(112 * var(--u)) "Orbitron",var(--disp);letter-spacing:.07em}
+  .lgBox.f4 .L{font:900 calc(168 * var(--u)) var(--disp);letter-spacing:.06em}
+  .lgBox.f4 .L{-webkit-mask:linear-gradient(172deg,#000 0 47%,transparent 47% 50.5%,#000 50.5%);mask:linear-gradient(172deg,#000 0 47%,transparent 47% 50.5%,#000 50.5%)}
+  .lgBox.f4 .lgChip{display:block}
+
+  /* ป้ายเหลืองด้านล่าง */
+  .lgTag{display:block;filter:drop-shadow(calc(-4 * var(--u)) 0 0 #00F0FF) drop-shadow(calc(4 * var(--u)) calc(3 * var(--u)) 0 #FF003C);transition:transform .05s}
+  .lgSlab{position:relative;display:flex;align-items:center;gap:calc(22 * var(--u));transform:skewX(-12deg);background:#F3E600;
+        padding:calc(7 * var(--u)) calc(16 * var(--u)) calc(7 * var(--u)) calc(20 * var(--u));
+        font:700 calc(17 * var(--u)) "Chakra Petch",sans-serif;color:#0A0A0F;white-space:nowrap;
+        clip-path:polygon(0 0,calc(100% - 22 * var(--u)) 0,100% calc(22 * var(--u)),100% 100%,calc(18 * var(--u)) 100%,0 calc(100% - 18 * var(--u)))}
+  .lgBars{display:block;height:calc(20 * var(--u));width:calc(110 * var(--u));background:repeating-linear-gradient(90deg,#0A0A0F 0 2px,transparent 2px 4px,#0A0A0F 4px 7px,transparent 7px 9px,#0A0A0F 9px 10px,transparent 10px 13px)}
+  .lgSlab b{background:#FF003C;padding:0 calc(10 * var(--u));margin-right:calc(18 * var(--u));font:900 calc(15 * var(--u)) "Noto Sans JP",sans-serif;letter-spacing:.2em;align-self:stretch;display:flex;align-items:center}
+
+  .hero{justify-items:start}
+  @media(max-width:899px){ .hero{justify-items:center;text-align:center} .heroText{padding-right:0} }
+  .logo{animation:fade .5s .1s both}
+

@@ -1,0 +1,162 @@
+</head>
+<body>
+<svg class="flow" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline class="pulse p0" style="animation-delay:-5.2s" points="1.8,34.1 29.8,34.1 32.8,21.8 42.6,21.8"/><polyline class="pulse p1" style="animation-delay:-3.8s" points="4.7,86.9 21.4,86.9 24.4,92.5 34.1,92.5"/><polyline class="pulse p2" style="animation-delay:-8.8s" points="0.6,79.4 20.0,79.4 23.0,69.2 41.9,69.2"/><polyline class="pulse p0" style="animation-delay:-5.0s" points="33.6,9.2 54.4,9.2 57.4,-0.7 81.6,-0.7"/><polyline class="pulse p1" style="animation-delay:-0.6s" points="-0.4,66.4 26.1,66.4 29.1,58.0 52.5,58.0"/><polyline class="pulse p2" style="animation-delay:-8.3s" points="4.3,10.4 32.9,10.4 35.9,22.4 56.8,22.4"/><polyline class="pulse p0" style="animation-delay:-4.5s" points="6.2,37.5 24.8,37.5 27.8,31.8 43.8,31.8"/><polyline class="pulse p1" style="animation-delay:-6.8s" points="15.2,35.9 42.4,35.9 45.4,29.9 64.9,29.9"/><polyline class="pulse p2" style="animation-delay:-7.9s" points="17.0,18.7 32.8,18.7 35.8,6.8 60.0,6.8"/></svg>
+<div class="wrap">
+  <!-- หัวเว็บ: ตัว ISEKAI ใหญ่ชิดซ้าย + คาตาคานะ イセカイ แนวตั้งเป็นลายประกอบ -->
+  <header class="hero">
+    <h1 class="logo" aria-label="ISEKAI">
+      <span class="lgBox f4" id="lgBox" aria-hidden="true">
+        <span class="lgBk">イセカイ</span>
+        <span class="L mg">ISEKAI</span><span class="L cy">ISEKAI</span>
+        <span class="L wt">ISEKAI</span><span class="L wt">ISEKAI</span><span class="L wt">ISEKAI</span>
+        <span class="lgChip" style="left:61.8%;top:48%;width:1.6%;height:6%"></span>
+        <span class="lgChip" style="left:64.2%;top:42%;width:1.05%;height:4%"></span>
+        <span class="lgChip" style="left:36.3%;top:59%;width:.9%;height:3.5%;background:#FF2BD6"></span>
+        <span class="lgNz"></span>
+      </span>
+      <span class="lgTag" id="lgTag" aria-hidden="true"><span class="lgSlab">SKIN ▸ ADDON / BEDROCK <span class="lgBars"></span><b>イセカイ</b></span></span>
+    </h1>
+    <div class="heroText">
+      <p class="tag">สตูดิโอแปลงสกินเป็นแอดออน Minecraft Bedrock</p>
+      <p class="sub">ใส่ไฟล์สกิน แล้วกดสร้างแอดออนสกินพร้อมนำเข้าเกม</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- เวทีโชว์ตัวละคร: วาดจากโมเดลจริงที่จะอยู่ในแอดออน -->
+    <aside class="stageCol" id="stageCol">
+      <div class="viewer" id="viewer">
+        <canvas id="vCanvas"></canvas>
+        <div class="beam" aria-hidden="true"></div>
+        <span class="tag" id="vTag">ตัวอย่าง 3 มิติ</span>
+        <div class="hud" aria-hidden="true">พรีวิวโมเดลจริง<br><span id="hudInfo">—</span></div>
+        <div class="empty" id="vEmpty">ยังไม่มีสกิน<br>ใส่ไฟล์แล้วตัวละครจะขึ้นตรงนี้</div>
+        <div class="vbtns">
+          <button class="btn ghost small" id="btnBody">ร่างเทา: เปิด</button>
+          <button class="btn ghost small" id="btnWalk">หยุดเดิน</button>
+          <button class="btn ghost small" id="btnSpin">หมุน</button>
+          <button class="btn ghost small" id="btnNight">กลางคืน</button>
+        </div>
+      </div>
+      <p class="note stageNote">ลากในกรอบเพื่อหมุนดูเอง • ร่างสีเทา = ตัวผู้เล่นใต้สกิน (ตอนเล่นจริงใช้สกินล่องหน)</p>
+    </aside>
+
+    <div class="steps">
+      <!-- ขั้นที่ 1: ใส่สกิน -->
+      <section class="win" id="winSkin">
+        <h2><span class="num"></span>เลือกสกิน</h2>
+        <!-- ใช้ <label for> ให้มือถือเปิดตัวเลือกไฟล์เอง • ไม่ใส่ accept: กันไฟล์ .bbmodel เป็นสีเทา — ตรวจชนิดไฟล์ในโค้ดแทน -->
+        <label class="drop" id="drop" for="fileIn">
+          <span class="big">แตะเพื่อเลือกไฟล์ <b>.png</b> หรือ <b>.bbmodel</b></span>
+          <span class="note">เลือกได้หลายไฟล์ • สกินจัตุรัส 64–2048 หรือ 64×32 แบบเก่า<br>
+          .bbmodel ที่ชื่อตรงกับ .png จะจับคู่กันเอง</span>
+        </label>
+        <input type="file" id="fileIn" class="vh" multiple>
+        <input type="file" id="bbIn" class="vh">
+        <div class="msg" id="addMsg"></div>
+        <div class="list" id="list"></div>
+        <p class="note" id="listNote">แตะรายการเพื่อดูสกินนั้นบนเวที</p>
+      </section>
+
+  <!-- ขั้นที่ 2: ตั้งค่าแพ็ก -->
+      <section class="win" id="winSet">
+        <h2><span class="num"></span>ตั้งค่าแอดออน</h2>
+        <div class="row">
+          <div>
+            <label for="packName">ชื่อแพ็ก</label>
+            <input type="text" id="packName" maxlength="40" value="ISEKAI สกิน">
+          </div>
+          <div>
+            <label for="packVer">เวอร์ชัน (เพิ่มเองทุกครั้งที่สร้าง)</label>
+            <input type="text" id="packVer" maxlength="12" value="1">
+          </div>
+        </div>
+        <label for="slot">สวมที่ช่องเกราะ</label>
+        <select id="slot">
+          <option value="legs" selected>ช่องกางเกง</option>
+          <option value="head">ช่องหมวก</option>
+          <option value="chest">ช่องเสื้อ</option>
+          <option value="feet">ช่องรองเท้า</option>
+        </select>
+        <label for="nsIn">ชื่อย่อไอดีไอเทม (namespace)</label>
+        <input type="text" id="nsIn" maxlength="16" value="isk" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <p class="note" id="nsMsg"></p>
+        <p class="note">ไอดีไอเทมจะเป็น <code>ชื่อย่อ:รหัส</code> • ตั้งให้ไม่ซ้ำกับแอดออนอื่นในเซิร์ฟ กันไอเทมชนกัน • เปลี่ยนแล้วไอเทมเดิมในโลกจะหาย</p>
+        <p class="note">ค่าเกราะเป็น 0 เสมอ (ของแต่งตัว) • สร้างซ้ำได้แพ็กเดิมเวอร์ชันใหม่ <b>นำเข้าทับของเก่าได้</b></p>
+        <button class="btn ghost small" id="btnNew">เริ่มแพ็กใหม่แยกต่างหาก</button>
+      </section>
+
+      <!-- ขั้นที่ 3: สร้างไฟล์ -->
+      <section class="win" id="winBuild">
+        <h2><span class="num"></span>สร้างแอดออน</h2>
+        <!-- ไอเทมที่จะได้ในเกม: ไอคอน + ชื่อ + คำสั่ง /give (ก๊อปได้) -->
+        <div class="itemsBox hidden" id="itemsBox">
+          <p class="note" style="margin:0 0 8px">ไอเทมที่จะได้ในเกม (ไอคอนแบบในกระเป๋า) • แตะ "ก๊อป" เพื่อเอาคำสั่งไปแจกในเกม</p>
+          <div class="itemList" id="itemList"></div>
+        </div>
+        <button class="btn full" id="btnBuild" disabled>สร้างแอดออน</button>
+        <div class="msg" id="buildMsg"></div>
+        <!-- โหมดเว็บจริง: ได้ไฟล์ .mcaddon ตรง ๆ (ซ่อนกล่องเปลี่ยนนามสกุลด้วย JS) • โหมดใน Claude: ได้ .zip ต้องเปลี่ยนชื่อ -->
+        <details open id="renameBox">
+          <summary>เปลี่ยนไฟล์ .zip เป็น .mcaddon</summary>
+          <p class="note">หน้าเว็บส่งไฟล์ออกมาเป็น <code>.zip</code> ได้อย่างเดียว เปลี่ยนนามสกุลก่อนเปิดด้วยมายคราฟ</p>
+          <ul>
+            <li><b>Android:</b> แอปไฟล์ → Download → กดค้างที่ไฟล์ → เปลี่ยนชื่อ → แก้ <code>.zip</code> เป็น <code>.mcaddon</code> → แตะเปิดด้วย Minecraft</li>
+            <li><b>iPhone:</b> แอป ไฟล์ → กดค้างที่ไฟล์ → เปลี่ยนชื่อ → แก้ท้ายเป็น <code>.mcaddon</code> → แตะ → แชร์ → Minecraft</li>
+            <li><b>Windows:</b> File Explorer → View → ติ๊ก File name extensions → คลิกขวา → Rename → <code>.mcaddon</code> → ดับเบิลคลิก</li>
+          </ul>
+        </details>
+        <details open id="openBox" class="hidden">
+          <summary>เปิดไฟล์เข้าเกม</summary>
+          <ul>
+            <li><b>Android:</b> แตะแจ้งเตือนดาวน์โหลด หรือแอปไฟล์ → Download → แตะไฟล์ <code>.mcaddon</code> → เลือก Minecraft</li>
+            <li><b>iPhone:</b> แอป ไฟล์ → ดาวน์โหลด → แตะไฟล์ → แชร์ → Minecraft</li>
+            <li><b>Windows:</b> ดับเบิลคลิกไฟล์ในโฟลเดอร์ Downloads</li>
+          </ul>
+          <p class="note">ชื่อไฟล์เป็นภาษาอังกฤษเสมอ (เช่น <code>ISEKAI_v3.mcaddon</code>) ส่วนชื่อแพ็กในเกมยังเป็นภาษาไทยตามที่ตั้ง • ถ้าจะเปลี่ยนชื่อไฟล์เอง <b>ห้ามมีภาษาไทยหรือเว้นวรรค</b> ไม่งั้นเกมจะเปิดขึ้นมาแต่ไม่นำเข้า • ถ้าเครื่องเปลี่ยนเป็น <code>.zip</code> เอง ให้แก้กลับเป็น <code>.mcaddon</code></p>
+        </details>
+        <!-- สกินล่องหน: ต้องใช้เป็นสกินหลัก ไม่งั้นสกินจริงของผู้เล่นจะโผล่ซ้อนกับสกินจากแอดออน -->
+        <div class="invisBox">
+          <button class="btn ghost" id="btnInvis" type="button">โหลดสกินล่องหน (.png)</button>
+          <p class="note">ใช้เป็นสกินหลักในเกม: ห้องแต่งตัว → สกินคลาสสิก → <b>นำเข้า</b> → เลือกไฟล์นี้ → แบบแขนปกติ • ทำครั้งเดียวพอ</p>
+          <div class="msg" id="invisMsg"></div>
+        </div>
+        <details>
+          <summary>แก้ปัญหาที่เจอบ่อย</summary>
+          <dl class="faq">
+            <dt>แตะไฟล์แล้วเกมเปิด แต่ไม่นำเข้าเลย</dt>
+            <dd>ชื่อไฟล์มีภาษาไทยหรือเว้นวรรค → เปลี่ยนชื่อไฟล์เป็นอังกฤษล้วน เช่น <code>isekai_v3.mcaddon</code> แล้วเปิดจากแอปไฟล์</dd>
+            <dt>แตะไฟล์แล้วไม่มี Minecraft ให้เลือก</dt>
+            <dd>ไฟล์อาจกลายเป็น <code>.zip</code> → เปลี่ยนนามสกุลกลับเป็น <code>.mcaddon</code></dd>
+            <dt>ขึ้นว่าแพ็กซ้ำ / นำเข้าทับไม่ได้</dt>
+            <dd>เวอร์ชันเท่าเดิมกับที่เคยนำเข้า → เพิ่มเลขเวอร์ชันในขั้นตั้งค่าแล้วสร้างใหม่</dd>
+            <dt>หาไอเทมไม่เจอ</dt>
+            <dd>เปิด Behavior Pack ในการตั้งค่าโลกหรือยัง → ดูในแท็บอุปกรณ์ กลุ่มเกราะของช่องที่เลือก หรือใช้คำสั่ง /give จากรายการด้านบน</dd>
+            <dt>สวมแล้วไม่เห็นสกิน</dt>
+            <dd>มุมมองบุคคลที่ 1 จะไม่แสดง (ตั้งใจ ไม่บังจอ) → สลับเป็นบุคคลที่ 3 • ต้องสวมในช่องเกราะที่เลือกตอนสร้าง ไม่ใช่ถือในมือ</dd>
+            <dt>เห็นสกินเดิมของตัวเองซ้อนอยู่</dt>
+            <dd>ยังไม่ได้ใช้สกินล่องหน → กดปุ่มโหลดสกินล่องหนด้านบน แล้วนำเข้าเป็นสกินหลัก</dd>
+            <dt>ผมหรือชิ้นตกแต่งไปอยู่ผิดที่</dt>
+            <dd>สกินนี้ต้องใช้ <code>.bbmodel</code> คู่กัน → ใส่ไฟล์โมเดลของสกินในขั้นที่ 1</dd>
+            <dt>มองทะลุตัวเป็นรู ๆ</dt>
+            <dd>ลายสกินชั้นในมีจุดโปร่งใส → แก้รูปสกินให้ทึบ (เว็บจะเตือนในรายการสกินถ้าเจอ)</dd>
+          </dl>
+        </details>
+        <details>
+          <summary>เข้าเกมแล้วใช้ยังไง</summary>
+          <ol>
+            <li>ใช้ <b>สกินล่องหน</b> เป็นสกินหลักของตัวเอง (กดปุ่มโหลดด้านบน)</li>
+            <li>สร้างหรือแก้โลก → เปิด <b>Behavior Pack</b> (Resource Pack เปิดตามเอง)</li>
+            <li>โหมดสร้างสรรค์ → แท็บอุปกรณ์ → กลุ่มเกราะของช่องที่เลือก → หาไอเทมหน้าหัวสกิน</li>
+            <li>สวมในช่องเกราะ = เห็นสกิน • ถือในมือหรือมุมมองบุคคลที่ 1 จะไม่วาด</li>
+            <li>เอาชีวิตรอด: แจกด้วย <code>/give @s ชื่อไอเทม</code> (ดูชื่อใน README.txt ในแพ็ก)</li>
+          </ol>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <!-- ปุ่มสร้างลอยล่างจอ (มือถือ) -->
+  <div class="stickyBuild" id="stickyBuild"><button class="btn" id="stickyBtn" type="button">สร้างแอดออน <span id="stickyCount"></span></button></div>
+  <footer><span class="mark">ISEKAI</span><span>ทุกอย่างทำในเครื่องคุณเอง ไม่มีการอัปโหลดสกินไปที่ไหน</span></footer>
+</div>

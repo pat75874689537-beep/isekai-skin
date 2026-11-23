@@ -1,0 +1,134 @@
+
+  /* =====================================================================
+     ธีมสตรีทไซเบอร์พังก์ (v15) — ให้ทั้งเว็บพูดภาษาเดียวกับโลโก้
+     เหลือง = สิ่งที่ต้องทำ/สำเร็จ • ชมพู/ฟ้า = แสงไฟประดับเล็กน้อย • แผงตัดมุมเหมือนป้าย
+     ===================================================================== */
+  :root{ --pk:#FF2BD6; --cy:#5FF6FF; --red:#FF003C; --cut:16px }
+
+  /* พื้นหลัง: แสงชมพูมุมขวาบน ฟ้าจางซ้าย */
+  body{background-image:
+         radial-gradient(1000px 560px at 88% -10%,rgba(255,43,214,.11),transparent 65%),
+         radial-gradient(900px 600px at -12% 34%,rgba(95,246,255,.06),transparent 70%),
+         url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><g fill='none' stroke='%235FF6FF' stroke-opacity='.06' stroke-width='1'><path d='M0 54h48l14 14h52M114 68v44l14 14h92M26 220v-50l18-18h30M164 0v30l-14 14H96M190 220v-34l-10-10h-46l-12-12v-30'/><path d='M0 164h36M78 0v22M220 92h-38l-10 10'/></g><g fill='%235FF6FF' fill-opacity='.14'><rect x='112' y='66' width='4' height='4'/><rect x='72' y='150' width='4' height='4'/><rect x='94' y='42' width='4' height='4'/><rect x='120' y='132' width='4' height='4'/></g><g fill='%23F3E600' fill-opacity='.3'><rect x='34' y='162' width='4' height='4'/></g><g fill='%23FF2BD6' fill-opacity='.35'><rect x='170' y='100' width='4' height='4'/></g></svg>"),
+         radial-gradient(rgba(95,246,255,.08) 1px,transparent 1.2px)}
+
+  /* ===== แผง: ตัดมุมขวาบน/ซ้ายล่างเหมือนป้าย =====
+     clip-path ขยายไปทางซ้าย 60px เพื่อไม่ตัดวงกลมเลขขั้นที่อยู่นอกแผง
+     เส้นขอบมุมเฉียงวาดเองด้วย gradient เพราะ border ปกติจะถูกตัดหายตรงมุม */
+  .win,.card{border-radius:0;border-color:rgba(95,246,255,.16);
+     background:
+       linear-gradient(225deg,transparent calc(var(--cut) * .707 - 1px),rgba(95,246,255,.4) calc(var(--cut) * .707 - 1px) calc(var(--cut) * .707 + .5px),transparent calc(var(--cut) * .707 + .5px)) 100% 0/calc(var(--cut) + 2px) calc(var(--cut) + 2px) no-repeat,
+       linear-gradient(45deg,transparent calc(12px * .707 - 1px),rgba(95,246,255,.3) calc(12px * .707 - 1px) calc(12px * .707 + .5px),transparent calc(12px * .707 + .5px)) 0 100%/14px 14px no-repeat,
+       linear-gradient(180deg,rgba(19,20,34,.94),rgba(12,13,23,.94));
+     clip-path:polygon(-60px 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,12px 100%,0 calc(100% - 12px),0 70px,-60px 70px)}
+  .win:focus-within{border-color:rgba(95,246,255,.34)}
+
+  /* หัวแผง = เทปเหลืองคาดชื่อขั้น (เอียงเหมือนป้ายโลโก้) */
+  .card h2,.win h2{display:flex;align-items:center;gap:10px;margin:-2px 0 16px;padding:0;border:0;font-size:19px;font-weight:700}
+  .win h2::before{content:"";flex:0 0 auto;width:10px;height:22px;background:var(--sig);transform:skewX(-14deg);
+     box-shadow:-3px 0 0 var(--cy),3px 0 0 var(--pk)}
+  .win h2::after{content:"";flex:1 1 auto;height:1px;align-self:center;background:linear-gradient(90deg,rgba(95,246,255,.3),transparent)}
+
+  /* ขั้นที่ยังทำไม่ได้: ไม่ทำทั้งแผงจาง แต่ติดป้าย "รอสกิน" สีเหลืองดำ */
+  .win.locked > :not(h2){opacity:.5}
+  .win.locked h2::after{content:"รอสกินจากขั้นที่ 1";flex:0 0 auto;height:auto;margin-left:auto;padding:2px 10px;font-size:13px;font-weight:700;
+     color:#0A0A0F;background:repeating-linear-gradient(-45deg,var(--sig) 0 8px,#d9cc00 8px 16px);transform:skewX(-12deg)}
+
+  /* เลขขั้นบนราว: ทำเสร็จ = เหลือง */
+  .steps > .win::before{border-color:rgba(95,246,255,.22);color:var(--cy)}
+  .steps > .win.done::before{color:#0A0A0F}
+
+  /* แผงสร้างแอดออน: แถบลายเหลืองดำ */
+  #winBuild::after{background:repeating-linear-gradient(-45deg,var(--sig) 0 9px,#0A0A0F 9px 18px);opacity:1;height:6px;right:var(--cut)}
+
+  /* ปุ่มหลักเหลือง ตัดมุม + ขอบฟ้า/ชมพูด้านในตอนชี้ (drop-shadow ใช้ไม่ได้เพราะโดน clip-path ตัด) */
+  .btn{border-radius:0;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));color:#0A0A0F;font-weight:700}
+  .btn.ghost{clip-path:none;border-color:rgba(95,246,255,.22);font-weight:500}
+  @media (hover:hover){
+    .btn:not(.ghost):not(:disabled):hover{filter:none;box-shadow:inset 5px 0 0 var(--cy),inset -5px 0 0 var(--pk)}
+    .btn.ghost:hover{border-color:var(--cy);color:var(--cy)}
+  }
+  .btn.full{font-size:20px;letter-spacing:.04em}
+
+  /* ช่องเลือกไฟล์: ลายเส้นทแยงเหลืองจาง */
+  label.drop{border-radius:0;border-color:rgba(243,230,0,.35);
+     background:repeating-linear-gradient(-45deg,rgba(243,230,0,.035) 0 10px,transparent 10px 20px),var(--ink3)}
+  @media (hover:hover){ label.drop:hover{border-color:var(--sig)} }
+  label.drop b{color:var(--sig)}
+
+  /* ช่องกรอก/การ์ดสกิน */
+  input[type=text],select{border-radius:0;border-color:rgba(95,246,255,.16)}
+  .skin{border-radius:0}
+  .skin.sel{border-color:rgba(243,230,0,.55)}
+  .chk input{accent-color:var(--sig)}
+  code{color:var(--cy);background:rgba(95,246,255,.08)}
+
+  /* เวทีพรีวิว: ตัดมุมเหมือนแผง ป้ายชื่อเป็นเทปเหลือง */
+  .viewer{border-radius:0;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%)}
+  .viewer .tag{border-left:0;padding:1px 10px;background:var(--sig);color:#0A0A0F;font-weight:700;transform:skewX(-12deg)}
+
+  footer{border-top-color:rgba(95,246,255,.14)}
+  .hero{border-bottom-color:rgba(95,246,255,.14)}
+  /* ระหว่างสร้าง: ปุ่มไม่จาง แต่เป็นแถบเหลืองวิ่ง ให้รู้ว่ากำลังทำงาน */
+  .btn.full.busy:disabled{opacity:1;cursor:progress}
+
+  /* ===== v16: เอาวงแหวนแท่นออก + ลดของที่ขยับ ให้โลโก้เด่นตัวเดียว ===== */
+  /* พื้นใต้เท้าตัวละคร: แค่แสงเหลือง/ชมพูจาง ๆ เป็นเงาพื้น */
+  .viewer{background:
+     radial-gradient(ellipse 34% 6% at 50% 78%,rgba(243,230,0,.14),transparent 70%),
+     radial-gradient(ellipse 60% 16% at 50% 80%,rgba(255,43,214,.10),transparent 70%),
+     linear-gradient(rgba(95,246,255,.045) 1px,transparent 1px) 0 0/100% 26px,
+     linear-gradient(90deg,rgba(95,246,255,.045) 1px,transparent 1px) 0 0/26px 100%,
+     linear-gradient(180deg,#0E1022,#06070D)}
+  .viewer.summon canvas{animation:summonFlash 1.2s var(--ease)}
+  @keyframes summonFlash{0%{filter:none}18%{filter:brightness(1.8) drop-shadow(0 0 14px rgba(243,230,0,.8))}100%{filter:none}}
+  /* ลำแสงสแกนในกรอบพรีวิว: ช้าลงและจางลง */
+  .viewer .beam{animation-duration:11s;opacity:.6}
+  /* เส้นข้อมูลบนพื้นหลัง: จางลงและช้าลงมาก (แค่บรรยากาศ ไม่แย่งโลโก้) */
+  .flow .pulse{opacity:.16;animation-duration:26s}
+  .flow .p1{opacity:.2;animation-duration:32s}
+  .flow .p2{opacity:.1;animation-duration:22s}
+
+  /* ===== มือถือ: กรอบพรีวิวถูกย้ายมาอยู่ใต้ขั้น "เลือกสกิน" (ทำใน JS) และซ่อนไว้จนกว่าจะมีสกิน ===== */
+  @media(max-width:899px){
+    .stageCol.empty{display:none}
+    .steps > .stageCol{margin-left:-46px}
+    .viewer{height:380px}
+  }
+  @media(max-width:560px){ .steps > .stageCol{margin-left:-38px} }
+
+  /* ชื่อสกินยังว่าง: ขอบเหลืองบอกว่าต้องใส่ */
+  .skin input.need{border-color:var(--sig);box-shadow:inset 3px 0 0 var(--sig)}
+  .skin input::placeholder{color:rgba(243,230,0,.7)}
+  /* ปุ่มโหลดสกินล่องหน: อยู่ใต้ปุ่มสร้าง แบบรอง */
+  .invisBox{margin:16px 0 4px;padding:12px 14px;border:1px dashed rgba(95,246,255,.25);background:rgba(95,246,255,.03)}
+  .invisBox .btn{width:100%}
+  .invisBox .note{margin:8px 0 0}
+
+  /* ===== v26: ไอเทมในแพ็ก / ปุ่มลอย / namespace / เตือนรู / แก้ปัญหา ===== */
+  .itemsBox{margin:0 0 14px}
+  .itemList{display:flex;flex-direction:column;gap:6px}
+  .itemRow{display:flex;align-items:center;gap:10px;padding:6px 8px;background:var(--ink3);border:1px solid rgba(95,246,255,.12)}
+  /* ช่องกระเป๋าแบบในเกม: กรอบเทาเข้ม ขอบนูน */
+  .invSlot{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;background:#8b8b8b;
+     box-shadow:inset 2px 2px 0 #373737,inset -2px -2px 0 #fff}
+  .invIcon{width:32px;height:32px;image-rendering:pixelated}
+  .itemTxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .itemTxt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .itemTxt code{font-size:12px;overflow-wrap:anywhere;user-select:all}
+  .itemRow .btn{flex:0 0 auto}
+  #nsIn.bad{border-color:var(--red);box-shadow:inset 3px 0 0 var(--red)}
+  #nsMsg:empty{display:none}
+  #nsMsg{color:var(--warn,#ffd23f)}
+  .holeWarn{margin-top:6px;font-size:13px;color:#ffd23f}
+  .faq dt{font-weight:700;margin-top:10px}
+  .faq dd{margin:2px 0 0;color:var(--dim,#9aa3c0);font-size:14px}
+  .stickyBuild{display:none}
+  @media(max-width:899px){
+    .stickyBuild{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+      background:linear-gradient(transparent,rgba(7,8,14,.92) 30%);display:block;transform:translateY(110%);transition:transform .25s var(--ease)}
+    .stickyBuild.on{transform:none}
+    .stickyBuild .btn{width:100%;font-size:17px}
+    .stickyBuild #stickyCount{font-weight:500;opacity:.75;margin-left:6px}
+    body.hasSticky{padding-bottom:76px}
+  }

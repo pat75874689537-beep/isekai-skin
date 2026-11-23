@@ -1,0 +1,77 @@
+        <!-- ฟังชั่นเสริม (อยู่ในแผงตั้งค่าแอดออน): เลือกสกินจากแท็บ แล้วติ๊กฟังชั่นของสกินนั้น -->
+        <p class="note fxEmpty" id="fxEmpty">ฟังชั่นเสริม (กระพริบตา • ตาขยับ • ตาเรืองแสง • ผมพริ้ว) เลือกได้ตรงนี้หลังใส่สกิน</p>
+        <div class="fxSec hidden" id="fxCard">
+    <h3 class="fxHead">ฟังชั่นเสริม</h3>
+    <div class="fxTabs" id="fxTabs" role="tablist" aria-label="เลือกสกินที่จะตั้งฟังชั่น"></div>
+    <p class="note" style="margin:8px 0 0">กำลังตั้งให้: <b id="fxName"></b> • ไม่เลือกอะไร = สกินเปล่า ผมติดหัวตามโมเดล</p>
+    <div class="row">
+      <div>
+        <label for="fxBlink">กระพริบตา (ขนตาเลื่อนลงมาทั้งเส้น)</label>
+        <select id="fxBlink">
+          <option value="off">ไม่ใส่</option>
+          <option value="normal">ปกติ (0.34 วิ)</option>
+          <option value="slow">ช้า นุ่ม (0.6 วิ)</option>
+        </select>
+      </div>
+      <div>
+        <label for="fxRange">ตัดระยะของฟังชั่น (ไกลกว่านี้หยุดคำนวณ)</label>
+        <select id="fxRange">
+          <option value="5">5 บล็อก</option>
+          <option value="10" selected>10 บล็อก</option>
+          <option value="15">15 บล็อก</option>
+          <option value="25">25 บล็อก</option>
+          <option value="40">40 บล็อก</option>
+        </select>
+      </div>
+    </div>
+    <div class="checks">
+      <label class="chk"><input type="checkbox" id="fxMove"> ตาขยับ (มองตามหัว + เหลือบเอง)</label>
+      <label class="chk"><input type="checkbox" id="fxGlow"> ตาดำเรืองแสง (ในที่มืด)</label>
+      <label class="chk"><input type="checkbox" id="fxFlow"> ผมพริ้ว (ปิด = ผมติดหัวแบบแข็ง)</label>
+    </div>
+
+    <div class="eyeBox hidden" id="eyeBox">
+      <div class="eyeTools">
+        <button class="btn ghost small" id="eyAuto">✨ ช่วยหาตา</button>
+        <button class="btn ghost small" id="eyL">▭ ลากกรอบตาซ้าย</button>
+        <button class="btn ghost small" id="eyR">▭ ลากกรอบตาขวา</button>
+        <button class="btn ghost small" id="eyEdit">✎ ดูกรอบ</button>
+      </div>
+      <!-- แต่งทีละพิกเซล: เลือกชั้น แล้วแตะ/ลากบนภาพขยายของตาข้างนั้น (แตะซ้ำ = เอาออก) -->
+      <div class="eyeTools paintTools" id="paintTools">
+        <span class="note">แตะเลือกทีละพิกเซล:</span>
+        <button class="btn ghost small" data-brush="iris"><i class="sw" style="background:#3d7bff"></i>ตาดำ</button>
+        <button class="btn ghost small" data-brush="open"><i class="sw" style="background:#ffd23f"></i>ช่องตา</button>
+        <button class="btn ghost small" data-brush="core"><i class="sw" style="background:#ff4d6d"></i>เรืองแสง</button>
+      </div>
+      <div class="eyeTools hidden" id="paintSub">
+        <button class="btn ghost small" id="pzL">ตาซ้าย</button>
+        <button class="btn ghost small" id="pzR">ตาขวา</button>
+        <button class="btn ghost small" id="pzZoom" title="ขยายภาพ">×1</button>
+        <button class="btn ghost small" id="paintUndo">↶ ย้อน</button>
+        <button class="btn ghost small" id="paintClear">ล้างที่แต่งเอง</button>
+        <button class="btn ghost small" id="paintDone">✓ เสร็จ</button>
+      </div>
+      <div class="eyeWrap" id="eyeWrap"><canvas id="eyeCv"></canvas></div>
+      <p class="note hidden" id="paintHint">แตะพิกเซลเพื่อใส่เข้าชั้นที่เลือก • แตะซ้ำเพื่อเอาออก • ลากนิ้วเพื่อทาหลายช่อง • ขอบหนา = พิกเซลที่แต่งเอง</p>
+      <div class="legend">
+        <span><i style="background:#4ee6ff"></i>กรอบตาซ้าย</span><span><i style="background:#4dff9a"></i>กรอบตาขวา</span>
+        <span><i style="background:#c77dff"></i>ขนตา</span><span><i style="background:#3d7bff"></i>ตาดำที่ขยับ</span>
+        <span><i style="background:#ffd23f"></i>ช่องตา</span><span><i style="background:#ff4d6d"></i>ส่วนเรืองแสง</span>
+      </div>
+      <div class="eyeTools">
+        <span class="note">ทดสอบ:</span>
+        <button class="btn ghost small" data-sim="open">ลืมตา</button>
+        <button class="btn ghost small" data-sim="half">ครึ่งหลับ</button>
+        <button class="btn ghost small" data-sim="shut">หลับตา</button>
+        <button class="btn ghost small" data-sim="left">มองซ้ายสุด</button>
+        <button class="btn ghost small" data-sim="right">มองขวาสุด</button>
+        <button class="btn ghost small" data-sim="dark">ในที่มืด</button>
+      </div>
+      <p class="note">กรอบตา = บริเวณที่เปลือกตาปิดตอนหลับ ให้ครอบตั้งแต่เส้นขนตาบนลงมาถึงขอบล่างของตา • ลากบนรูปเพื่อวาดกรอบใหม่</p>
+    </div>
+    <div class="msg" id="fxMsg"></div>
+    <button class="btn ghost small hidden" id="fxAll" style="margin-top:12px">ใช้ฟังชั่นชุดนี้กับทุกสกิน</button>
+        </div>
+
+
