@@ -132,3 +132,10 @@
     .stickyBuild #stickyCount{font-weight:500;opacity:.75;margin-left:6px}
     body.hasSticky{padding-bottom:76px}
   }
+  /* v28: เลือกว่าชิ้นพิเศษ (ผม/หาง/ปีก) ติดกับส่วนไหน */
+  .attach{margin-top:8px;border:1px solid rgba(0,240,255,.25);padding:6px 8px;background:rgba(0,240,255,.04)}
+  .attach summary{cursor:pointer;font-size:13px;color:#00f0ff;padding:4px 0}
+  .attachHint{font-size:12px;opacity:.75;margin:4px 0 6px}
+  .attachRow{display:block;margin:8px 0;font-size:13px}
+  .attachRow span{display:block;overflow-wrap:anywhere;color:#c9d2ff;margin-bottom:3px}
+  .attachRow select{display:block;width:100%;max-width:100%;margin:0}
