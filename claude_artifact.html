@@ -450,6 +450,8 @@
   .pcVal{color:#00f0ff;font-variant-numeric:tabular-nums}
   .pcRow input[type=range]{width:100%;accent-color:#f3e600;height:28px;margin:0}
   .pcTip{margin-top:6px;font-size:13px;color:#00f0ff}
+  .pcPresets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+  .pcPresets .btn{flex:1 1 auto}
 </style>
 </head>
 <body>
@@ -1087,15 +1089,18 @@ const V = { list:[], renderer:null, scene:null, cam:null, root:null, bones:{}, t
 function boxFaces(c){
   const inf = c.inflate || 0, [w,h,d] = c.size, o = c.origin;
   const x0=o[0]-inf, y0=o[1]-inf, z0=o[2]-inf, x1=o[0]+w+inf, y1=o[1]+h+inf, z1=o[2]+d+inf;
+  // หน้าล่าง (ใต้คาง) ของสกินแบบกล่อง: ขอบบนของลายอยู่ด้านหลัง ขอบล่างอยู่ด้านหน้า แบบเดียวกับในเกม/Blockbench
+  //   (v30 และก่อนหน้า วางกลับหัว → ใต้คางในตัวอย่างกลับหน้า-หลัง: ผมไปอยู่ใต้คาง สีผิวไปอยู่หลังคอ)
   const P = { north:[[x0,y1,z0],[x1,y1,z0],[x0,y0,z0]], south:[[x1,y1,z1],[x0,y1,z1],[x1,y0,z1]],
               west:[[x0,y1,z1],[x0,y1,z0],[x0,y0,z1]],  east:[[x1,y1,z0],[x1,y1,z1],[x1,y0,z0]],
-              up:[[x0,y1,z1],[x1,y1,z1],[x0,y1,z0]],    down:[[x0,y0,z0],[x1,y0,z0],[x0,y0,z1]] };
+              up:[[x0,y1,z1],[x1,y1,z1],[x0,y1,z0]],    down:[[x0,y0,z1],[x1,y0,z1],[x0,y0,z0]] };
   const out = [];
   if(Array.isArray(c.uv)){
     let [u,v] = c.uv;
     const R = { north:[u+d,v+d,w,h], south:[u+2*d+w,v+d,w,h], west:[u,v+d,d,h], east:[u+d+w,v+d,d,h], up:[u+d,v,w,d], down:[u+d+w,v,w,d] };
     for(const k in P) out.push([k, R[k], P[k]]);
   } else {
+    P.down = [[x0,y0,z0],[x1,y0,z0],[x0,y0,z1]];   // ลาย UV รายหน้า (จาก .bbmodel) ใช้ทิศเดิม — แก้เฉพาะสกินแบบกล่อง (box UV) ที่ยืนยันแล้ว
     for(const k in P) if(c.uv[k]) out.push([k, [...c.uv[k].uv, ...c.uv[k].uv_size], P[k]]);
   }
   return out;
@@ -1528,6 +1533,18 @@ function renderPieces(){
     const top = document.createElement('div'); top.className = 'pcTop'; top.append(t, v);
     wrap.append(top, r); body.append(wrap);
   }
+  // ท่าสำเร็จรูปของลายชั้นนอกตัว (.png)
+  //   ผมห้อยหลังหัว: ติดหัว + ดันไปข้างหลัง 2.1 ให้แผ่นหลัง (z 2.25) ไปอยู่เสมอหลังหัว (z ~4.35 เลยชั้นหมวก 4.5 ไม่ได้ จะซ้อนกัน) ห้อยลงตรงๆ ไม่หมุน
+  //   ติดเสื้อแบบเดิม: ขยับตามตัว อยู่ตำแหน่งเดิมของลายบนหลังเสื้อ
+  if(pc.key === '@jacket'){
+    const pr = document.createElement('div'); pr.className = 'pcPresets';
+    for(const [label, head, a] of [['ผมห้อยหลังหัว (แนะนำ)', true, { p:[0,0,2.1], r:[0,0,0] }], ['ติดเสื้อแบบเดิม', false, null]]){
+      const b = document.createElement('button'); b.className = 'btn ghost small'; b.textContent = label;
+      b.onclick = () => { s.jacketHead = head; s.adj = { ...(s.adj || {}) }; if(a) s.adj[pc.key] = a; else delete s.adj[pc.key]; saveLocal(); updateViewer(); renderPieces(); };
+      pr.append(b);
+    }
+    body.insertBefore(pr, body.children[1] || null);
+  }
   const rs = document.createElement('button'); rs.className = 'btn ghost small'; rs.textContent = 'รีเซ็ตเลื่อน/หมุนของชิ้นนี้';
   rs.onclick = () => { if(s.adj) delete s.adj[pc.key]; saveLocal(); updateViewer(); renderPieces(); };
   body.append(rs);
@@ -1748,7 +1765,7 @@ async function build(){
     saveLocal();
     show(msg, 'ok', `สร้างเสร็จ ตรวจผ่านทุกข้อ ได้ไฟล์ <b>${esc(fname)}</b> (${skins.length} สกิน, เวอร์ชัน ${ver.join('.')})<br>
       ${IN_CLAUDE ? 'ต่อไป: เปลี่ยน <code>.zip</code> เป็น <code>.mcaddon</code> ตามวิธีด้านล่าง' : 'แตะเปิดไฟล์จากที่ดาวน์โหลด แล้วเลือก Minecraft ได้เลย'}<br>
-      <span class="note">สร้างครั้งหน้า = แพ็กเดิมเวอร์ชันใหม่ นำเข้าทับได้เลย</span>`);
+      <span class="note">สร้างครั้งหน้า = แพ็กเดิมเวอร์ชันใหม่ นำเข้าทับได้เลย • ถ้าแตะไฟล์แล้วเกมเงียบ ไม่มีข้อความนำเข้า (ของในเกมไม่เปลี่ยน) → กด <b>ขอไอดีแพ็กใหม่</b> ในขั้นตั้งค่า แล้วสร้างใหม่</span>`);
   }catch(e){
     show(msg, 'err', 'สร้างไม่สำเร็จ: ' + esc(e && (e.message || e.code) || e));
   }finally{ btn.disabled = state.skins.length === 0; btn.classList.remove('busy'); btn.textContent = 'สร้างแอดออน'; }

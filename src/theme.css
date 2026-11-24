@@ -157,3 +157,5 @@
   .pcVal{color:#00f0ff;font-variant-numeric:tabular-nums}
   .pcRow input[type=range]{width:100%;accent-color:#f3e600;height:28px;margin:0}
   .pcTip{margin-top:6px;font-size:13px;color:#00f0ff}
+  .pcPresets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+  .pcPresets .btn{flex:1 1 auto}
