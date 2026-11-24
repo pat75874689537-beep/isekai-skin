@@ -139,3 +139,6 @@
   .attachRow{display:block;margin:8px 0;font-size:13px}
   .attachRow span{display:block;overflow-wrap:anywhere;color:#c9d2ff;margin-bottom:3px}
   .attachRow select{display:block;width:100%;max-width:100%;margin:0}
+  /* v29: คำแนะนำสกินชิ้นพิเศษ (ไม่ใช่ข้อผิดพลาด) */
+  .needbb.soft{background:rgba(0,240,255,.06);border-left-color:#00f0ff;color:#cfeff5;font-size:13px}
+  .chk.jh{display:flex;margin-top:6px;line-height:1.4}

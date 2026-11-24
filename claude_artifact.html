@@ -432,6 +432,9 @@
   .attachRow{display:block;margin:8px 0;font-size:13px}
   .attachRow span{display:block;overflow-wrap:anywhere;color:#c9d2ff;margin-bottom:3px}
   .attachRow select{display:block;width:100%;max-width:100%;margin:0}
+  /* v29: คำแนะนำสกินชิ้นพิเศษ (ไม่ใช่ข้อผิดพลาด) */
+  .needbb.soft{background:rgba(0,240,255,.06);border-left-color:#00f0ff;color:#cfeff5;font-size:13px}
+  .chk.jh{display:flex;margin-top:6px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -682,7 +685,9 @@ function loadLocal(){
     const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if(!d) return;
     if(Array.isArray(d.skins)) state.skins = d.skins.filter(s => s && typeof s.dataUrl === 'string' && s.dataUrl.startsWith('data:image/png') && s.px > 0);
-    state.skins.forEach(s => { if(s.bb && s.bb.bones) sanitizeBones(s.bb.bones); delete s.fx; if(!/\p{L}/u.test(s.name || '')) s.name = ''; s.attach = cleanAttach(s); });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
+    state.skins.forEach(s => { if(s.bb && s.bb.bones) sanitizeBones(s.bb.bones); delete s.fx; if(!/\p{L}/u.test(s.name || '')) s.name = ''; s.attach = cleanAttach(s);
+      if(s.special && s.parts && s.parts.body === false && s.parts.arms === false && s.parts.legs === false && !s.partsByUser) s.parts = undefined;   // v29: ส่วนที่ระบบเคยปิดเอง เปิดคืน
+      s.jacketHead = s.jacketHead === true; });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
     const p = d.project;
     const isU = u => typeof u === 'string' && /^[0-9a-f-]{36}$/i.test(u);
     if(p && /^[a-z0-9]{5}$/.test(p.code) && isU(p.bp) && isU(p.bpm) && isU(p.rp) && isU(p.rpm)) state.project = p;
@@ -776,7 +781,7 @@ function extraPixels(g, s, slim){
   return Math.round(n / (s * s));   // นับเป็นพิกเซลขนาด 64
 }
 // สกินนี้ต้องใช้ .bbmodel ไหม (มีชิ้นพิเศษ ≥ 6 พิกเซล64 และยังไม่ได้ใส่ .bbmodel และผู้ใช้ยังไม่ยืนยันใช้โมเดลมาตรฐาน)
-const needsBB = s => !s.bb && !!s.special && !s.forceStd;
+const needsBB = s => false;   // v29: ไม่บล็อกแล้ว ไฟล์ .png อย่างเดียวก็สร้างได้ (แสดงแบบ Blockbench)
 // พื้นที่ของแต่ละชิ้นในสกินมาตรฐาน (u, v, กว้าง, สูง)
 const REG = {
   head:[0,0,32,16], hat:[32,0,32,16], body:[16,16,24,16], jacket:[16,32,24,16],
@@ -788,7 +793,7 @@ const REG = {
    โมเดลมาตรฐาน (สูตรข้อ 2.5) — ใส่เฉพาะชิ้นที่สกินมีพิกเซล
    bones รูปแบบเดียวกับไฟล์ .geo.json ของ Bedrock
    ===================================================================== */
-function standardBones(has, slim){
+function standardBones(has, slim, jacketHead){
   const aw = slim ? 3 : 4, rx = slim ? -7 : -8;
   const C = (o, sz, uv, inf) => inf ? { origin:o, size:sz, uv, inflate:inf } : { origin:o, size:sz, uv };
   const part = (name, pivot, list) => {
@@ -798,7 +803,9 @@ function standardBones(has, slim){
   return [
     // หัว + ชั้นหมวกใส่เสมอ (หัวคือหัวใจของสกิน ISK)
     { name:'head', pivot:[0,24,0], cubes:[ C([-4,24,-4],[8,8,8],[0,0]), C([-4,24,-4],[8,8,8],[32,0],0.5) ] },
-    part('body', [0,24,0], [[has.body, C([-4,12,-2],[8,12,4],[16,16])], [has.jacket, C([-4,12,-2],[8,12,4],[16,32],0.25)]]),
+    part('body', [0,24,0], [[has.body, C([-4,12,-2],[8,12,4],[16,16])], [has.jacket && !jacketHead, C([-4,12,-2],[8,12,4],[16,32],0.25)]]),
+    // ชั้นนอกตัวที่ผู้ใช้เลือกให้ตามหัว: แยกเป็น bone ลูกของหัว หมุนรอบคอ (ผมยาวที่วาดบนหลังเสื้อหันตามหัว)
+    jacketHead && has.jacket ? { name:'jacket_head', parent:'head', pivot:[0,24,0], cubes:[ C([-4,12,-2],[8,12,4],[16,32],0.25) ] } : null,
     part('rightArm', [-5,22,0], [[has.rArm, C([rx,12,-2],[aw,12,4],[40,16])], [has.rSleeve, C([rx,12,-2],[aw,12,4],[40,32],0.25)]]),
     part('leftArm', [5,22,0], [[has.lArm, C([4,12,-2],[aw,12,4],[32,48])], [has.lSleeve, C([4,12,-2],[aw,12,4],[48,48],0.25)]]),
     part('rightLeg', [-1.9,12,0], [[has.rLeg, C([-3.9,0,-2],[4,12,4],[0,16])], [has.rPants, C([-3.9,0,-2],[4,12,4],[0,32],0.25)]]),
@@ -960,8 +967,8 @@ async function makeSkinFromImage(name, url){
   if(img.height === 32 && img.width === 64){ url = upgradeLegacy(img); img = await loadImg(url); }
   else url = canvasOf(img).toDataURL('image/png'); // วาดใหม่ให้เป็น png สะอาด
   const a = analyse(img);
-  // สกินที่มีชิ้นพิเศษ: ปิดตัว/แขน/ขาไว้ก่อน (พื้นที่นั้นมักเป็นชิ้นผม ไม่ใช่ลายตัว)
-  const parts = a.special ? { body: false, arms: false, legs: false } : undefined;
+  // v29: แสดงทุกชั้นที่มีลายเหมือน Blockbench (เดิมปิดตัว/แขน/ขาให้เองเมื่อเจอชิ้นพิเศษ → ผมที่วาดบนหลังหาย)
+  const parts = undefined;
   return { id: Date.now() + '_' + Math.random().toString(36).slice(2,7), k: nextK(),   // k = เลขไอเทมประจำสกิน (สกินถูก push ทันทีหลังสร้าง เลขจึงไม่ซ้ำ)
            name: cleanName(name),   // ว่างได้ = ให้ผู้ใช้พิมพ์ชื่อเอง (ช่องขึ้นว่า "ใส่ชื่อสกิน")
            model: 'auto', slimAuto: a.slim, has: a.has, extra: a.extra, special: a.special, parts, dataUrl: url, px: img.width, bb: null, bbName: '' };
@@ -1224,7 +1231,7 @@ function geometryOf(s){
   if(pt.body === false) has.body = has.jacket = false;
   if(pt.arms === false) has.rArm = has.rSleeve = has.lArm = has.lSleeve = false;
   if(pt.legs === false) has.rLeg = has.rPants = has.lLeg = has.lPants = false;
-  return { bones: standardBones(has, modelOf(s) === 'slim'), texW: 64, texH: 64 };
+  return { bones: standardBones(has, modelOf(s) === 'slim', !!s.jacketHead), texW: 64, texH: 64 };
 }
 // กล่องมองเห็น ต้องครอบทุกชิ้น (ผมยาว) ไม่งั้นผมหายบางมุมกล้อง — ขั้นต่ำตามสูตร 3×3 กลาง 1.5
 function visibleBounds(bones){
@@ -1277,26 +1284,29 @@ async function render(){
         const cb = document.createElement('input'); cb.type = 'checkbox';
         cb.checked = !!auto && (s.parts || {})[key] !== false; cb.disabled = !auto;
         cb.onclick = e => e.stopPropagation();
-        cb.onchange = () => { s.parts = { ...(s.parts || {}), [key]: cb.checked }; saveLocal(); render(); };
+        cb.onchange = () => { s.parts = { ...(s.parts || {}), [key]: cb.checked }; s.partsByUser = true; saveLocal(); render(); };
         lb.onclick = e => e.stopPropagation();
         lb.append(cb, document.createTextNode(label + (auto ? '' : ' (ไม่มีลาย)'))); pw.append(lb);
       }
       mid.append(pw);
+      if(h0.jacket && (s.parts || {}).body !== false){   // มีลายชั้นนอกของตัว → เลือกให้หันตามหัวได้
+        const lb = document.createElement('label'); lb.className = 'chk small jh';
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!s.jacketHead;
+        cb.onclick = e => e.stopPropagation(); lb.onclick = e => e.stopPropagation();
+        cb.onchange = () => { s.jacketHead = cb.checked; saveLocal(); render(); };
+        lb.append(cb, document.createTextNode('ผมที่วาดบนหลัง ขยับตามหัว'));
+        mid.append(lb);
+      }
     }
     const meta = document.createElement('div'); meta.className = 'meta';
     const geo = geometryOf(s);
     const parts = geo.bones.filter(b => b.cubes && b.cubes.length).map(b => b.name);
     meta.innerHTML = `รูป ${s.px}×${s.px} • ${s.bb ? 'โมเดล: <b>' + esc(s.bbName) + '</b>' : 'โมเดลมาตรฐาน'}<br>ชิ้น: ${esc(parts.join(', '))}`;
     // เตือน: สกินมีชิ้นผม/ระนาบพิเศษ แต่ยังไม่มี .bbmodel → ผมจะไปอยู่ผิดที่
-    if(!s.bb && s.special){
-      const w = document.createElement('div'); w.className = 'needbb';
-      w.innerHTML = '⚠ สกินนี้มีชิ้นผม/ระนาบพิเศษ ต้องใส่ <b>.bbmodel</b> ของสกินนี้ ไม่งั้นผมจะไปอยู่ผิดที่';
-      const lb = document.createElement('label'); lb.className = 'chk small';
-      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!s.forceStd;
-      cb.onclick = e => e.stopPropagation(); lb.onclick = e => e.stopPropagation();
-      cb.onchange = () => { s.forceStd = cb.checked; saveLocal(); render(); };
-      lb.append(cb, document.createTextNode('ไม่มีไฟล์ ใช้โมเดลมาตรฐานไปก่อน (ชิ้นผมพิเศษจะหาย)'));
-      w.append(lb); meta.append(w);
+    if(!s.bb && s.special){   // แค่แนะนำ: สกินนี้น่าจะทำมาคู่กับ .bbmodel (ใส่หรือไม่ใส่ก็สร้างได้)
+      const w = document.createElement('div'); w.className = 'needbb soft';
+      w.innerHTML = 'ℹ สกินนี้มีชิ้นพิเศษ ตอนนี้แสดงแบบ Blockbench แล้ว • ถ้ามี <b>.bbmodel</b> ของสกินนี้ ใส่เพิ่มได้ ชิ้นพิเศษจะอยู่ตรงตำแหน่งที่ออกแบบไว้';
+      meta.append(w);
     }
     // เตือนรูโปร่งใส (เฉพาะโมเดลมาตรฐาน ส่วนที่เลือกใส่)
     if(!s.bb && !s.special && s.holes && s.holes.length){
@@ -1425,7 +1435,7 @@ function updateViewer(){
   // ข้อมูลเล็กมุมขวาบนของเวที: ขนาดรูป + จำนวนชิ้นในโมเดล
   $('hudInfo').textContent = `${s.px}px • ${geometryOf(s).bones.reduce((n, b) => n + (b.cubes ? b.cubes.length : 0), 0)} ชิ้น`;
   if(!window.THREE){ $('vTag').textContent += ' (โหลดตัวโชว์ 3D ไม่ได้ ต้องต่อเน็ต)'; return; }
-  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {});
+  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {}) + '|' + !!s.jacketHead;
   if(V.key !== key){ V.key = key; buildPreview(s); }
 }
 
