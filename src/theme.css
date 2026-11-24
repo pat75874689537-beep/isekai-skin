@@ -142,3 +142,18 @@
   /* v29: คำแนะนำสกินชิ้นพิเศษ (ไม่ใช่ข้อผิดพลาด) */
   .needbb.soft{background:rgba(0,240,255,.06);border-left-color:#00f0ff;color:#cfeff5;font-size:13px}
   .chk.jh{display:flex;margin-top:6px;line-height:1.4}
+  /* v30: หมวดชิ้นพิเศษ ใต้ตัวอย่าง 3 มิติ */
+  .pieceBox{margin-top:14px;padding:14px 16px 16px;background:rgba(10,14,40,.85);border:1px solid rgba(0,240,255,.28);
+    clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px))}
+  .pieceBox h3{margin:0 0 4px;font-size:18px;color:#f3e600;letter-spacing:.02em}
+  .pieceBox h3 small{font-size:13px;color:#00f0ff;font-weight:400;margin-left:6px}
+  .pieceBox > .note{margin:0 0 10px}
+  .pcName{font-weight:700;color:#fff;margin:6px 0 10px;overflow-wrap:anywhere}
+  .pcField{display:block;margin:0 0 10px;font-size:13px;color:#c9d2ff}
+  .pcField span{display:block;margin-bottom:4px}
+  .pcField select{width:100%}
+  .pcRow{margin:0 0 10px}
+  .pcTop{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:#c9d2ff;margin-bottom:2px}
+  .pcVal{color:#00f0ff;font-variant-numeric:tabular-nums}
+  .pcRow input[type=range]{width:100%;accent-color:#f3e600;height:28px;margin:0}
+  .pcTip{margin-top:6px;font-size:13px;color:#00f0ff}

@@ -86,7 +86,7 @@ function loadLocal(){
     if(Array.isArray(d.skins)) state.skins = d.skins.filter(s => s && typeof s.dataUrl === 'string' && s.dataUrl.startsWith('data:image/png') && s.px > 0);
     state.skins.forEach(s => { if(s.bb && s.bb.bones) sanitizeBones(s.bb.bones); delete s.fx; if(!/\p{L}/u.test(s.name || '')) s.name = ''; s.attach = cleanAttach(s);
       if(s.special && s.parts && s.parts.body === false && s.parts.arms === false && s.parts.legs === false && !s.partsByUser) s.parts = undefined;   // v29: ส่วนที่ระบบเคยปิดเอง เปิดคืน
-      s.jacketHead = s.jacketHead === true; });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
+      s.jacketHead = s.jacketHead === true; s.adj = cleanAdj(s); });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
     const p = d.project;
     const isU = u => typeof u === 'string' && /^[0-9a-f-]{36}$/i.test(u);
     if(p && /^[a-z0-9]{5}$/.test(p.code) && isU(p.bp) && isU(p.bpm) && isU(p.rp) && isU(p.rpm)) state.project = p;
@@ -202,9 +202,10 @@ function standardBones(has, slim, jacketHead){
   return [
     // หัว + ชั้นหมวกใส่เสมอ (หัวคือหัวใจของสกิน ISK)
     { name:'head', pivot:[0,24,0], cubes:[ C([-4,24,-4],[8,8,8],[0,0]), C([-4,24,-4],[8,8,8],[32,0],0.5) ] },
-    part('body', [0,24,0], [[has.body, C([-4,12,-2],[8,12,4],[16,16])], [has.jacket && !jacketHead, C([-4,12,-2],[8,12,4],[16,32],0.25)]]),
+    part('body', [0,24,0], [[has.body, C([-4,12,-2],[8,12,4],[16,16])], [has.jacket && !jacketHead && jacketHead !== 'body', C([-4,12,-2],[8,12,4],[16,32],0.25)]]),
     // ชั้นนอกตัวที่ผู้ใช้เลือกให้ตามหัว: แยกเป็น bone ลูกของหัว หมุนรอบคอ (ผมยาวที่วาดบนหลังเสื้อหันตามหัว)
-    jacketHead && has.jacket ? { name:'jacket_head', parent:'head', pivot:[0,24,0], cubes:[ C([-4,12,-2],[8,12,4],[16,32],0.25) ] } : null,
+    jacketHead === true && has.jacket ? { name:'jacket_head', parent:'head', pivot:[0,24,0], cubes:[ C([-4,12,-2],[8,12,4],[16,32],0.25) ] } : null,
+    jacketHead === 'body' && has.jacket ? { name:'jacket_piece', parent:'body', pivot:[0,24,0], cubes:[ C([-4,12,-2],[8,12,4],[16,32],0.25) ] } : null,
     part('rightArm', [-5,22,0], [[has.rArm, C([rx,12,-2],[aw,12,4],[40,16])], [has.rSleeve, C([rx,12,-2],[aw,12,4],[40,32],0.25)]]),
     part('leftArm', [5,22,0], [[has.lArm, C([4,12,-2],[aw,12,4],[32,48])], [has.lSleeve, C([4,12,-2],[aw,12,4],[48,48],0.25)]]),
     part('rightLeg', [-1.9,12,0], [[has.rLeg, C([-3.9,0,-2],[4,12,4],[0,16])], [has.rPants, C([-3.9,0,-2],[4,12,4],[0,32],0.25)]]),
@@ -430,7 +431,7 @@ function sanitizeBones(bones){
   for(const b of bones) if(b.parent && rename.has(b.parent)) b.parent = rename.get(b.parent);
   return bones;
 }
-function attachBB(s, bb){ s.bb = { bones: sanitizeBones(bb.bones), texW: bb.texW, texH: bb.texH }; s.bbName = bb.file; s.attach = {}; }   // ไฟล์ใหม่ = ล้างการเลือกติดเดิม
+function attachBB(s, bb){ s.bb = { bones: sanitizeBones(bb.bones), texW: bb.texW, texH: bb.texH }; s.bbName = bb.file; s.attach = {}; s.adj = {}; }   // ไฟล์ใหม่ = ล้างการเลือกติดเดิม
 
 /* =====================================================================
    ไอคอน (สูตรข้อ 2.6): หน้าหัว (uv 8,8) + หน้าชั้นหมวก (uv 40,8) ซ้อนแบบ alpha → ย่อเนียน
@@ -534,6 +535,12 @@ function addGeo(geo, mat){
   }
   return objs;
 }
+// เท็กซ์เจอร์สกินที่ใช้อยู่ เก็บไว้ใช้ซ้ำ — ตอนลากแถบปรับชิ้นพิเศษ ตัวอย่างสร้างใหม่ถี่ๆ ไม่ต้องโหลดรูปใหม่ (ไม่กระพริบ)
+function skinTex(url){
+  if(V.tc && V.tc.url === url) return V.tc.tex;
+  if(V.tc) V.tc.tex.dispose();
+  V.tc = { url, tex: texOf(url) }; return V.tc.tex;
+}
 function texOf(src){
   const t = src instanceof HTMLCanvasElement ? new THREE.CanvasTexture(src) : new THREE.TextureLoader().load(src);
   t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t;
@@ -541,9 +548,9 @@ function texOf(src){
 async function buildPreview(s){
   if(!initViewer()) return;
   const geo = geometryOf(s);                              // สกินเปล่า: โมเดลหลักอย่างเดียว
-  if(V.outer){ V.scene.remove(V.outer); V.outer.traverse(o => { if(o.geometry) o.geometry.dispose(); if(o.material){ if(o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+  if(V.outer){ V.scene.remove(V.outer); V.outer.traverse(o => { if(o.geometry) o.geometry.dispose(); if(o.material){ if(o.material.map && !(V.tc && o.material.map === V.tc.tex)) o.material.map.dispose(); o.material.dispose(); } }); }
   V.list = [];
-  const mat = new THREE.MeshBasicMaterial({ map: texOf(s.dataUrl), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true });
+  const mat = new THREE.MeshBasicMaterial({ map: skinTex(s.dataUrl), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true });
   const gmat = new THREE.MeshBasicMaterial({ color: 0x8c93a8, side: THREE.DoubleSide, vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   // root: แปลงพิกัด Bedrock → three (z กลับ ให้หน้า (-z) หันหากล้อง และ +x อยู่ขวาจอเหมือนพรีวิวของสูตร)
   V.root = new THREE.Group(); V.root.scale.set(1, 1, -1);
@@ -623,14 +630,60 @@ function applyAttach(bones, attach){
   }
   return out;
 }
+/* ---------- ชิ้นพิเศษที่ปรับได้ (หมวด "ชิ้นพิเศษ" ใต้ตัวอย่าง 3 มิติ) ----------
+   s.adj = { คีย์ชิ้น: { p:[x,y,z] เลื่อน (หน่วยพิกเซลสกิน 64), r:[x,y,z] หมุน (องศา) } }
+   คีย์ชิ้น: .bbmodel = ชื่อ bone • .png = '@jacket' (ลายชั้นนอกของตัว เช่น ผมที่วาดบนหลัง) */
+const ADJ_P = 16, ADJ_R = 180;                       // เลื่อนได้ ±16 พิกเซล (1 บล็อก) หมุนได้ ±180°
+const adjOn = a => !!a && (a.p.some(v => v) || a.r.some(v => v));
+function piecesOf(s){
+  if(s.bb) return attachable(s.bb.bones).map(b => ({ key: b.name, label: b.name }));
+  const h = s.has || {};
+  if(h.jacket && (s.parts || {}).body !== false) return [{ key: '@jacket', label: 'ลายชั้นนอกของตัว (ผมที่วาดบนหลัง)' }];
+  return [];
+}
+// เลื่อน/หมุนชิ้นหนึ่ง: เลื่อน = ย้ายจุดหมุนและทุกกล่องของชิ้นนั้นกับชิ้นลูกทั้งหมด • หมุน = บวกเพิ่มที่ bone (ลูกหมุนตาม)
+function applyAdj(bones, name, a){
+  if(!adjOn(a)) return bones;
+  const kids = new Set([name]);
+  for(let grew = true; grew;){ grew = false; for(const b of bones) if(b.parent && kids.has(b.parent) && !kids.has(b.name)){ kids.add(b.name); grew = true; } }
+  const [dx, dy, dz] = a.p, mv = v => [r4(v[0] + dx), r4(v[1] + dy), r4(v[2] + dz)];
+  return bones.map(b => {
+    if(!kids.has(b.name)) return b;
+    const nb = { ...b, pivot: mv(b.pivot) };
+    if(b.cubes) nb.cubes = b.cubes.map(c => { const nc = { ...c, origin: mv(c.origin) }; if(c.pivot) nc.pivot = mv(c.pivot); return nc; });
+    if(b.name === name && a.r.some(v => v)){ const r0 = b.rotation || [0,0,0]; nb.rotation = [0,1,2].map(i => r4(r0[i] + a.r[i])); }
+    return nb;
+  });
+}
+// ค่าปรับที่จำไว้ในเครื่อง: เก็บเฉพาะชิ้นที่มีจริง ตัวเลขจริง และอยู่ในช่วงที่อนุญาต
+function cleanAdj(s){
+  const out = {}, a = s.adj;
+  if(!a || typeof a !== 'object' || Array.isArray(a)) return out;
+  const keys = new Set(piecesOf(s).map(p => p.key));
+  const v3 = (v, lim) => Array.isArray(v) && v.length === 3 ? v.map(x => Math.max(-lim, Math.min(lim, Number.isFinite(+x) ? +x : 0))) : [0,0,0];
+  for(const k of Object.keys(a)) if(keys.has(k) && a[k] && typeof a[k] === 'object'){ const e = { p: v3(a[k].p, ADJ_P), r: v3(a[k].r, ADJ_R) }; if(adjOn(e)) out[k] = e; }
+  return out;
+}
 function geometryOf(s){
-  if(s.bb) return { bones: applyAttach(s.bb.bones, s.attach), texW: s.bb.texW, texH: s.bb.texH };
+  if(s.bb){
+    let bones = applyAttach(s.bb.bones, s.attach);
+    for(const [k, a] of Object.entries(s.adj || {})) if(bones.some(b => b.name === k)) bones = applyAdj(bones, k, a);
+    return { bones, texW: s.bb.texW, texH: s.bb.texH };
+  }
   // ผู้ใช้ปิดบางส่วนได้ (สกิน HD มักเก็บชิ้นผมไว้ในพื้นที่ขา/แขน ไม่ใช่ลายตัวจริง)
   const has = { ...(s.has || {}) }, pt = s.parts || {};
   if(pt.body === false) has.body = has.jacket = false;
   if(pt.arms === false) has.rArm = has.rSleeve = has.lArm = has.lSleeve = false;
   if(pt.legs === false) has.rLeg = has.rPants = has.lLeg = has.lPants = false;
-  return { bones: standardBones(has, modelOf(s) === 'slim', !!s.jacketHead), texW: 64, texH: 64 };
+    // ลายชั้นนอกตัว: ติดหัว หรือมีค่าปรับ → แยกเป็นชิ้นของตัวเอง (ไม่ปรับอะไร = รวมกับตัวแบบเดิม)
+  const ja = (s.adj || {})['@jacket'];
+  const jmode = s.jacketHead ? true : (adjOn(ja) ? 'body' : false);
+  let bones = standardBones(has, modelOf(s) === 'slim', jmode);
+  if(jmode && has.jacket){
+    if(jmode === 'body' && !bones.some(b => b.name === 'body')) bones.splice(1, 0, { name: 'body', pivot: [0,24,0] });   // ตัวไม่มีลาย แต่ชิ้นต้องมีที่ติด
+    bones = applyAdj(bones, jmode === true ? 'jacket_head' : 'jacket_piece', ja);
+  }
+  return { bones, texW: 64, texH: 64 };
 }
 // กล่องมองเห็น ต้องครอบทุกชิ้น (ผมยาว) ไม่งั้นผมหายบางมุมกล้อง — ขั้นต่ำตามสูตร 3×3 กลาง 1.5
 function visibleBounds(bones){
@@ -688,14 +741,6 @@ async function render(){
         lb.append(cb, document.createTextNode(label + (auto ? '' : ' (ไม่มีลาย)'))); pw.append(lb);
       }
       mid.append(pw);
-      if(h0.jacket && (s.parts || {}).body !== false){   // มีลายชั้นนอกของตัว → เลือกให้หันตามหัวได้
-        const lb = document.createElement('label'); lb.className = 'chk small jh';
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!s.jacketHead;
-        cb.onclick = e => e.stopPropagation(); lb.onclick = e => e.stopPropagation();
-        cb.onchange = () => { s.jacketHead = cb.checked; saveLocal(); render(); };
-        lb.append(cb, document.createTextNode('ผมที่วาดบนหลัง ขยับตามหัว'));
-        mid.append(lb);
-      }
     }
     const meta = document.createElement('div'); meta.className = 'meta';
     const geo = geometryOf(s);
@@ -715,46 +760,15 @@ async function render(){
         w.textContent = '⚠ มีรูโปร่งใสบน ' + hs.map(h => `${h.part} ${h.pct}%`).join(', ') + ' — ในเกมจะมองทะลุตัวตรงนั้น (ถ้าตั้งใจก็ไม่เป็นไร)';
         meta.append(w); }
     }
-    // ชิ้นพิเศษ (ผม หาง ปีก ฯลฯ) เลือกได้ว่าจะติดกับส่วนไหนของตัว — เช่น ผมที่อยู่ในกลุ่มตัว ย้ายไปติดหัว
-    if(s.bb){
-      const list = attachable(s.bb.bones);
-      if(list.length){
-        const det = document.createElement('details'); det.className = 'attach';
-        det.open = !!s.attachOpen; det.ontoggle = () => { s.attachOpen = det.open; };
-        const sm = document.createElement('summary');
-        sm.textContent = `ชิ้นพิเศษติดกับส่วนไหน (${list.length} ชิ้น)`;
-        sm.onclick = e => e.stopPropagation();
-        det.append(sm);
-        const hint = document.createElement('div'); hint.className = 'attachHint';
-        hint.textContent = 'เช่น ผมที่ขยับตามตัว → เลือก "หัว" ผมจะหันตามหัว • ดูผลได้ที่ตัวอย่าง 3 มิติ';
-        det.append(hint);
-        const nice = { head:'หัว', body:'ตัว', rightArm:'แขนขวา', leftArm:'แขนซ้าย', rightLeg:'ขาขวา', leftLeg:'ขาซ้าย' };
-        for(const b of list){
-          const r = document.createElement('label'); r.className = 'attachRow';
-          const nm = document.createElement('span'); nm.textContent = b.name;
-          const sel = document.createElement('select'); sel.setAttribute('aria-label', 'ชิ้น ' + b.name + ' ติดกับ');
-          const now = b.parent ? (nice[b.parent] || 'ชิ้น ' + b.parent) : 'ไม่ติด';
-          const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'ตามไฟล์ (' + now + ')'; sel.append(o0);
-          for(const [v, t] of Object.entries(ATTACH)){ const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); }
-          sel.value = (s.attach || {})[b.name] || '';
-          sel.onclick = e => e.stopPropagation();
-          sel.onchange = () => {
-            s.attach = { ...(s.attach || {}) };
-            if(sel.value) s.attach[b.name] = sel.value; else delete s.attach[b.name];
-            if(i !== state.selected){ state.selected = i; }
-            saveLocal(); render();
-          };
-          r.onclick = e => e.stopPropagation();
-          r.append(nm, sel); det.append(r);
-        }
-        mid.append(det);
-      }
-    }
+    // มีชิ้นพิเศษ → บอกทางไปหมวดปรับ (อยู่ใต้ตัวอย่าง 3 มิติ)
+    const pcs = piecesOf(s);
+    if(pcs.length){ const t = document.createElement('div'); t.className = 'pcTip';
+      t.textContent = `ชิ้นพิเศษ ${pcs.length} ชิ้น • ปรับติด/เลื่อน/หมุนได้ที่หมวด "ชิ้นพิเศษ" ใต้ตัวอย่าง 3 มิติ`; mid.append(t); }
     // ปุ่มใส่ .bbmodel เป็น <label for="bbIn"> (มือถือเปิดตัวเลือกไฟล์ได้แน่นอน), ปุ่มลบเป็นปุ่มธรรมดา
     let bbBtn;
     if(s.bb){
       bbBtn = document.createElement('button'); bbBtn.textContent = 'ลบ .bbmodel (ใช้โมเดลมาตรฐาน)';
-      bbBtn.onclick = e => { e.stopPropagation(); s.bb = null; s.bbName = ''; s.attach = {}; saveLocal(); render(); };
+      bbBtn.onclick = e => { e.stopPropagation(); s.bb = null; s.bbName = ''; s.attach = {}; s.adj = {}; saveLocal(); render(); };
     } else {
       bbBtn = document.createElement('label'); bbBtn.htmlFor = 'bbIn'; bbBtn.textContent = '+ ใส่ .bbmodel ของสกินนี้';
       bbBtn.onclick = e => { e.stopPropagation(); pendingBB = s; };
@@ -778,6 +792,7 @@ async function render(){
   $('winBuild').classList.toggle('done', !!state.built);
   renderItems();
   updateViewer();
+  renderPieces();
 }
 // ---------- รายการไอเทมที่จะได้ในเกม: ไอคอน (หน้าหัว = ไอคอนในกระเป๋าจริง) + ชื่อ + ปุ่มก๊อปคำสั่ง /give ----------
 async function renderItems(){
@@ -825,6 +840,73 @@ $('stickyBtn').onclick = () => {
   setTimeout(() => { if(!$('btnBuild').disabled) $('btnBuild').click(); }, 450);   // เลื่อนไปให้เห็นข้อความผลก่อน แล้วค่อยสร้าง
 };
 let pendingBB = null;
+/* =====================================================================
+   หมวด "ชิ้นพิเศษ" (ใต้ตัวอย่าง 3 มิติ): เลือกชิ้น → ติดกับส่วนไหน + เลื่อน/หมุน ดูผลทันที
+   ===================================================================== */
+const ADJ_ROWS = [ ['p',0,'เลื่อนข้าง (ซ้าย-ขวา)'], ['p',1,'เลื่อนขึ้น-ลง'], ['p',2,'เลื่อนหน้า-หลัง'],
+                   ['r',0,'หมุนก้ม-เงย'], ['r',1,'หมุนส่าย (หันซ้าย-ขวา)'], ['r',2,'หมุนเอียง'] ];
+let pcSaveT = 0;
+function renderPieces(){
+  const box = $('pieceBox'); if(!box) return;
+  const s = state.skins[state.selected];
+  const pcs = s ? piecesOf(s) : [];
+  box.hidden = !s;
+  const body = $('pcBody'); body.textContent = '';
+  if(!s) return;
+  if(!pcs.length){
+    const p = document.createElement('p'); p.className = 'note';
+    p.textContent = s.bb ? 'โมเดลนี้ไม่มีชิ้นพิเศษนอกจากหัว/ตัว/แขน/ขา' : 'สกินนี้ไม่มีชิ้นพิเศษ • ถ้ามีผม/หาง/ปีกแบบ 3 มิติ ใส่ไฟล์ .bbmodel ของสกินเพิ่ม';
+    body.append(p); return;
+  }
+  if(!pcs.some(p => p.key === s.pcSel)) s.pcSel = pcs[0].key;
+  const pc = pcs.find(p => p.key === s.pcSel);
+  const field = (label, el) => { const l = document.createElement('label'); l.className = 'pcField'; const t = document.createElement('span'); t.textContent = label; l.append(t, el); body.append(l); return l; };
+  // เลือกชิ้น (ถ้ามีหลายชิ้น)
+  if(pcs.length > 1){
+    const pick = document.createElement('select'); pick.setAttribute('aria-label', 'เลือกชิ้นพิเศษ');
+    for(const p of pcs){ const o = document.createElement('option'); o.value = p.key; o.textContent = p.label + (adjOn((s.adj || {})[p.key]) || (s.attach || {})[p.key] ? '  ✎' : ''); pick.append(o); }
+    pick.value = s.pcSel; pick.onchange = () => { s.pcSel = pick.value; renderPieces(); };
+    field(`ชิ้น (${pcs.length} ชิ้น)`, pick);
+  } else { const t = document.createElement('div'); t.className = 'pcName'; t.textContent = pc.label; body.append(t); }
+  // ติดกับส่วนไหน
+  const to = document.createElement('select'); to.setAttribute('aria-label', 'ติดกับส่วนไหน');
+  if(s.bb){
+    const b = s.bb.bones.find(x => x.name === pc.key);
+    const nice = { head:'หัว', body:'ตัว', rightArm:'แขนขวา', leftArm:'แขนซ้าย', rightLeg:'ขาขวา', leftLeg:'ขาซ้าย' };
+    const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'ตามไฟล์ (' + (b && b.parent ? (nice[b.parent] || 'ชิ้น ' + b.parent) : 'ไม่ติด') + ')'; to.append(o0);
+    for(const [v, t] of Object.entries(ATTACH)){ const o = document.createElement('option'); o.value = v; o.textContent = t; to.append(o); }
+    to.value = (s.attach || {})[pc.key] || '';
+    to.onchange = () => { s.attach = { ...(s.attach || {}) }; if(to.value) s.attach[pc.key] = to.value; else delete s.attach[pc.key]; saveLocal(); updateViewer(); renderItems(); };
+  } else {
+    for(const [v, t] of [['body','ตัว (ขยับตามตัว)'], ['head','หัว (หันตามหัว)']]){ const o = document.createElement('option'); o.value = v; o.textContent = t; to.append(o); }
+    to.value = s.jacketHead ? 'head' : 'body';
+    to.onchange = () => { s.jacketHead = to.value === 'head'; saveLocal(); updateViewer(); };
+  }
+  field('ติดกับ', to);
+  // แถบเลื่อน/หมุน
+  const cur = () => { const a = (s.adj || {})[pc.key]; return a ? { p: a.p.slice(), r: a.r.slice() } : { p:[0,0,0], r:[0,0,0] }; };
+  for(const [g, i, label] of ADJ_ROWS){
+    const lim = g === 'p' ? ADJ_P : ADJ_R;
+    const wrap = document.createElement('div'); wrap.className = 'pcRow';
+    const t = document.createElement('span'); t.className = 'pcLbl'; t.textContent = label;
+    const v = document.createElement('output'); v.className = 'pcVal';
+    const r = document.createElement('input'); r.type = 'range'; r.min = -lim; r.max = lim; r.step = g === 'p' ? 0.5 : 1;
+    r.setAttribute('aria-label', label); r.value = cur()[g][i];
+    const fmt = x => (x > 0 ? '+' : '') + x + (g === 'p' ? ' px' : '°');
+    v.textContent = fmt(+r.value);
+    r.oninput = () => {
+      const a = cur(); a[g][i] = Math.max(-lim, Math.min(lim, +r.value || 0)); v.textContent = fmt(a[g][i]);
+      s.adj = { ...(s.adj || {}) }; if(adjOn(a)) s.adj[pc.key] = a; else delete s.adj[pc.key];
+      updateViewer();                                   // ตัวอย่างสร้างใหม่ทันที (ใช้เท็กซ์เจอร์เดิม ไม่กระพริบ)
+      clearTimeout(pcSaveT); pcSaveT = setTimeout(saveLocal, 400);   // จำลงเครื่องตอนหยุดลาก
+    };
+    const top = document.createElement('div'); top.className = 'pcTop'; top.append(t, v);
+    wrap.append(top, r); body.append(wrap);
+  }
+  const rs = document.createElement('button'); rs.className = 'btn ghost small'; rs.textContent = 'รีเซ็ตเลื่อน/หมุนของชิ้นนี้';
+  rs.onclick = () => { if(s.adj) delete s.adj[pc.key]; saveLocal(); updateViewer(); renderPieces(); };
+  body.append(rs);
+}
 function updateViewer(){
   const s = state.skins[state.selected];
   $('vEmpty').style.display = s ? 'none' : 'block';
@@ -834,7 +916,7 @@ function updateViewer(){
   // ข้อมูลเล็กมุมขวาบนของเวที: ขนาดรูป + จำนวนชิ้นในโมเดล
   $('hudInfo').textContent = `${s.px}px • ${geometryOf(s).bones.reduce((n, b) => n + (b.cubes ? b.cubes.length : 0), 0)} ชิ้น`;
   if(!window.THREE){ $('vTag').textContent += ' (โหลดตัวโชว์ 3D ไม่ได้ ต้องต่อเน็ต)'; return; }
-  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {}) + '|' + !!s.jacketHead;
+  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {}) + '|' + !!s.jacketHead + '|' + JSON.stringify(s.adj || {});
   if(V.key !== key){ V.key = key; buildPreview(s); }
 }
 
@@ -1107,6 +1189,18 @@ $('btnNew').onclick = () => {
   b.dataset.arm = ''; b.textContent = 'เริ่มแพ็กใหม่แยกต่างหาก';
   $('addMsg').className = 'msg'; $('buildMsg').className = 'msg';
   render(); saveLocal();
+};
+// ขอไอดีแพ็กใหม่ แต่เก็บสกินและการตั้งค่าไว้ครบ — แก้อาการ "แตะไฟล์แล้วเกมเงียบ" ที่เกิดจากไอดีชนกับแพ็กที่อยู่ในเกม
+//   (ทดสอบจริงบน Android: ไฟล์เดิมเงียบ แต่ไฟล์เดียวกันที่ไอดีใหม่นำเข้าได้) • เลขไอเทมเปลี่ยนด้วย เพราะรหัสโปรเจกต์ใหม่
+$('btnNewId').onclick = () => {
+  const b = $('btnNewId');
+  if(b.dataset.arm !== '1'){ b.dataset.arm = '1'; b.textContent = 'กดอีกครั้งเพื่อยืนยัน'; setTimeout(() => { b.dataset.arm = ''; b.textContent = 'ขอไอดีแพ็กใหม่ (สกินอยู่ครบ)'; }, 3000); return; }
+  b.dataset.arm = ''; b.textContent = 'ขอไอดีแพ็กใหม่ (สกินอยู่ครบ)';
+  state.project = { code: randCode(), bp: uuid(), bpm: uuid(), rp: uuid(), rpm: uuid() };
+  $('packVer').value = '1'; state.built = false;
+  $('buildMsg').className = 'msg';
+  saveLocal(); render();
+  show($('newIdMsg'), 'ok', 'ได้ไอดีแพ็กใหม่แล้ว (เวอร์ชันเริ่มที่ 1) • กดสร้างแอดออนใหม่ แล้วนำเข้าเกม');
 };
 ['packName','packVer','slot'].forEach(id => $(id).addEventListener('change', saveLocal));
 // namespace: พิมพ์แล้วตรวจทันที ใช้ได้ = บันทึก + อัปเดตคำสั่ง /give, ใช้ไม่ได้ = ขอบแดง + บอกเหตุผล
