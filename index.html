@@ -667,7 +667,7 @@ function randCode(){ // รหัสโปรเจกต์ 5 ตัว ใช�
   return [...crypto.getRandomValues(new Uint8Array(5))].map(x => a[x % a.length]).join('');
 }
 // ชื่อเริ่มต้นจากชื่อไฟล์ — ถ้าไม่มีตัวอักษรเลย (มือถือมักตั้งเป็นตัวเลข เช่น 1000083989) ให้ว่างไว้ ผู้ใช้พิมพ์เอง
-function autoName(file){ const n = cleanName(String(file).replace(/\.png$/i,'').replace(/[_\-]+/g,' ')); return /\p{L}/u.test(n) ? n : ''; }
+function autoName(file){ const n = cleanName(String(file).replace(EXT_RE,'').replace(/[_\-]+/g,' ')); return /\p{L}/u.test(n) ? n : ''; }
 // ชื่อย่อ namespace: a-z ตัวแรก ตามด้วย a-z 0-9 _ ยาว 2–16 ห้ามเป็น minecraft
 function validNs(n){ return typeof n === 'string' && /^[a-z][a-z0-9_]{1,15}$/.test(n) && n !== 'minecraft' && n !== 'minecon'; }
 // เลขไอเทมถัดไปสำหรับสกินใหม่ (มากสุด + 1)
@@ -694,7 +694,9 @@ function loadImg(src){ return new Promise((ok, no) => { const i = new Image(); i
 function readAs(f, kind){ return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); kind === 'text' ? r.readAsText(f) : r.readAsDataURL(f); }); }
 function canvasOf(img, wrf){ const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d', wrf ? { willReadFrequently: true } : undefined).drawImage(img, 0, 0); return c; }
 function dataUrlBytes(u){ const b = atob(u.split(',')[1]); const a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
-const baseName = n => n.replace(/\.(png|bbmodel)$/i, '').toLowerCase();
+// ชื่อไฟล์ไม่มีนามสกุลไว้จับคู่ png↔bbmodel — ตัดท้ายแปลกที่แอปแชต/ดาวน์โหลดเติมให้ด้วย เช่น model.bbmodel_19, skin.png (1)
+const EXT_RE = /\.(png|bbmodel)(?:[ _\-(][^.]*)?$/i;
+const baseName = n => n.replace(EXT_RE, '').trim().toLowerCase();
 
 // ---------- บันทึก/โหลดโปรเจกต์ในเครื่อง ----------
 function saveLocal(){
@@ -884,13 +886,25 @@ function parseBBModel(text){
   // แปลงชิ้นเดียว
   const toCube = e => {
     if(e.type && e.type !== 'cube'){ warns.push(`ข้ามชิ้น "${safe(e.name)}" (เป็น mesh ใช้ใน Bedrock ไม่ได้)`); return null; }
-    if(e.visibility === false || e.export === false) return null;
+    if(e.export === false) return null;   // v32: ชิ้นที่ซ่อนไว้ในหน้าจอ Blockbench (ปิดรูปตา) ยังต้องใส่ — Blockbench เองก็ export ให้ ข้ามเฉพาะชิ้นที่ปิด Export
     const f = v3(e.from), t = v3(e.to);
     const c = { origin: [r4(-t[0]), r4(f[1]), r4(f[2])], size: [r4(t[0]-f[0]), r4(t[1]-f[1]), r4(t[2]-f[2])] };
     const isBox = e.box_uv !== undefined ? !!e.box_uv : projBox;
     if(isBox){
       c.uv = Array.isArray(e.uv_offset) ? [num(e.uv_offset[0]), num(e.uv_offset[1])] : [0,0];
       if(e.mirror_uv) c.mirror = true;
+      // v32: ระนาบแนวตั้ง (หนา 0) ที่ลายแบบกล่องล้นขอบรูป (เช่น ผมแผ่นกว้าง 17 ช่อง หน้าหลังเลยขอบขวา)
+      //   → แปลงเป็นลายรายหน้า เก็บเฉพาะหน้าที่อยู่ในรูปทั้งหมด (หน้าหน้ายังอยู่ เกมวาดสองด้านให้เอง) ไม่งั้นเกมดึงลายส่วนอื่นมาโชว์ด้านหลัง
+      const [w, h, d] = c.size, [u, v] = c.uv;
+      if((u + 2*d + 2*w > resW + 0.01 || v + d + h > resH + 0.01) && (w === 0 || d === 0)){
+        const R = { north:[u+d, v+d, w, h], south:[u+2*d+w, v+d, w, h], west:[u, v+d, d, h], east:[u+d+w, v+d, d, h] };
+        const pf = {};
+        for(const [k, [fu, fv, fw, fh]] of Object.entries(R)){
+          if(fw <= 0 || fh <= 0 || fu < 0 || fv < 0 || fu + fw > resW + 0.01 || fv + fh > resH + 0.01) continue;
+          pf[k] = c.mirror ? { uv:[r4(fu + fw), r4(fv)], uv_size:[-fw, fh] } : { uv:[r4(fu), r4(fv)], uv_size:[fw, fh] };
+        }
+        if(Object.keys(pf).length){ c.uv = pf; delete c.mirror; warns.push(`ชิ้น "${safe(e.name)}" ลายล้นขอบรูป ตัดด้านที่ล้นออก (เหลือด้านที่อยู่ในรูป)`); }
+      }
     } else {
       c.uv = {};
       for(const side of ['north','south','east','west','up','down']){
@@ -1010,8 +1024,21 @@ async function makeSkinFromImage(name, url){
 }
 async function addFiles(files){
   const msgs = [], warns = [];
-  const pngs = files.filter(f => /\.png$/i.test(f.name));
-  const bbs = files.filter(f => /\.bbmodel$/i.test(f.name));
+  // แยกชนิดไฟล์: ดูจากนามสกุลก่อน ถ้านามสกุลแปลก (เช่น .bbmodel_19 จากแอปแชต) ดูจากเนื้อไฟล์แทน
+  //   png = 8 ไบต์แรกเป็นลายเซ็น PNG • bbmodel = ข้อความ JSON ขึ้นต้นด้วย {
+  const kinds = await Promise.all(files.map(async f => {
+    if(/\.png$/i.test(f.name)) return 'png';
+    if(/\.bbmodel$/i.test(f.name)) return 'bb';
+    try{
+      const h = new Uint8Array(await f.slice(0, 16).arrayBuffer());
+      if(h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4E && h[3] === 0x47) return 'png';
+      const first = [...h].find(c => c > 0x20);
+      if(first === 0x7B && f.size <= MAX_BB) return 'bb';
+    }catch(e){}
+    return '';
+  }));
+  const pngs = files.filter((f, i) => kinds[i] === 'png');
+  const bbs = files.filter((f, i) => kinds[i] === 'bb');
   const other = files.filter(f => !pngs.includes(f) && !bbs.includes(f));
   other.forEach(f => msgs.push(`${esc(f.name)}: รับเฉพาะ .png / .bbmodel`));
   let added = 0;
@@ -1038,7 +1065,7 @@ async function addFiles(files){
   for(const [k, bb] of Object.entries(bbMap)){
     try{
       if(!bb.tex) throw new Error('ไม่มีรูปสกินในไฟล์ ใส่ .png ชื่อเดียวกันมาด้วย');
-      const s = await makeSkinFromImage(autoName(bb.file.replace(/\.bbmodel$/i,'')), bb.tex);
+      const s = await makeSkinFromImage(autoName(bb.file), bb.tex);
       attachBB(s, bb); state.skins.push(s); added++;
     }catch(e){ msgs.push(`${esc(bb.file)}: ${esc(e.message)}`); }
   }
