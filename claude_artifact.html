@@ -452,6 +452,9 @@
   .pcTip{margin-top:6px;font-size:13px;color:#00f0ff}
   .pcPresets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
   .pcPresets .btn{flex:1 1 auto}
+  /* v33: ปรับละเอียดซ่อนไว้ใต้ประเภทชิ้น */
+  .pcAdv{margin-top:4px;border-top:1px solid rgba(0,240,255,.18);padding-top:8px}
+  .pcAdv summary{cursor:pointer;font-size:13px;color:#00f0ff;padding:4px 0 8px}
 </style>
 </head>
 <body>
@@ -877,7 +880,8 @@ function parseBBModel(text){
 
   // แปลงชิ้นเดียว
   const toCube = e => {
-    if(e.type && e.type !== 'cube'){ warns.push(`ข้ามชิ้น "${safe(e.name)}" (เป็น mesh ใช้ใน Bedrock ไม่ได้)`); return null; }
+    // ชนิดที่ไม่ใช่กล่อง: mesh ใช้ในสกิน Bedrock ไม่ได้ (เตือน) • locator/null_object/อื่นๆ ไม่มีรูปร่าง ข้ามเงียบๆ
+    if(e.type && e.type !== 'cube'){ if(e.type === 'mesh') warns.push(`ข้ามชิ้น "${safe(e.name)}" (เป็น mesh ใช้ในสกิน Bedrock ไม่ได้)`); return null; }
     if(e.export === false) return null;   // v32: ชิ้นที่ซ่อนไว้ในหน้าจอ Blockbench (ปิดรูปตา) ยังต้องใส่ — Blockbench เองก็ export ให้ ข้ามเฉพาะชิ้นที่ปิด Export
     const f = v3(e.from), t = v3(e.to);
     const c = { origin: [r4(-t[0]), r4(f[1]), r4(f[2])], size: [r4(t[0]-f[0]), r4(t[1]-f[1]), r4(t[2]-f[2])] };
@@ -1503,6 +1507,21 @@ let pendingBB = null;
 const ADJ_ROWS = [ ['p',0,'เลื่อนข้าง (ซ้าย-ขวา)'], ['p',1,'เลื่อนขึ้น-ลง'], ['p',2,'เลื่อนหน้า-หลัง'],
                    ['r',0,'หมุนก้ม-เงย'], ['r',1,'หมุนส่าย (หันซ้าย-ขวา)'], ['r',2,'หมุนเอียง'] ];
 let pcSaveT = 0;
+/* ประเภทชิ้น (ตัวเลือกหลักของหมวดชิ้นพิเศษ) — เลือกจากรายการตายตัวเท่านั้น ไม่มีค่าแปลกหลุดเข้าแอดออน
+   แต่ละประเภท = ส่วนที่ชิ้นจะติด (ค่าที่เก็บจริงยังเป็น s.attach เดิม ตรวจด้วย cleanAttach ทุกครั้งที่โหลด) */
+const CATS_BB = [
+  ['',          'ตามไฟล์ (ไม่เปลี่ยน)',                    ''],
+  ['head',      'ผม / หู / ของบนหัว — หันตามหัว',          'head'],
+  ['body',      'ผมยาว / หาง / ปีก / ผ้าคลุม — ขยับตามตัว', 'body'],
+  ['rightArm',  'ของติดแขนขวา',                           'rightArm'],
+  ['leftArm',   'ของติดแขนซ้าย',                          'leftArm'],
+  ['rightLeg',  'ของติดขาขวา',                            'rightLeg'],
+  ['leftLeg',   'ของติดขาซ้าย',                           'leftLeg'],
+  ['none',      'ลอยตามผู้เล่น (ไม่หันตามส่วนไหน)',        'none'] ];
+// ลายชั้นนอกตัวของ .png: ผมห้อยหลังหัว = ติดหัว + ดันไปข้างหลัง 2 (ตรงขั้นแถบเลื่อน 0.5) ให้เสมอหลังหัว (z 2.25 → 4.25 อยู่ระหว่างหัว 4 กับชั้นหมวก 4.5)
+const CATS_PNG = [
+  ['shirt', 'ลายบนหลังเสื้อ — ขยับตามตัว (แบบเดิม)', { head:false, adj:null }],
+  ['hang',  'ผมห้อยหลังหัว — หันตามหัว (แนะนำ)', { head:true, adj:{ p:[0,0,2], r:[0,0,0] } }] ];
 function renderPieces(){
   const box = $('pieceBox'); if(!box) return;
   const s = state.skins[state.selected];
@@ -1517,64 +1536,68 @@ function renderPieces(){
   }
   if(!pcs.some(p => p.key === s.pcSel)) s.pcSel = pcs[0].key;
   const pc = pcs.find(p => p.key === s.pcSel);
-  const field = (label, el) => { const l = document.createElement('label'); l.className = 'pcField'; const t = document.createElement('span'); t.textContent = label; l.append(t, el); body.append(l); return l; };
-  // เลือกชิ้น (ถ้ามีหลายชิ้น)
+  const field = (label, el, parent = body) => { const l = document.createElement('label'); l.className = 'pcField'; const t = document.createElement('span'); t.textContent = label; l.append(t, el); parent.append(l); return l; };
+  const opt = (sel, v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
+  // 1) เลือกชิ้น (ถ้ามีหลายชิ้น) — ✎ = ชิ้นที่ปรับแล้ว
   if(pcs.length > 1){
     const pick = document.createElement('select'); pick.setAttribute('aria-label', 'เลือกชิ้นพิเศษ');
-    for(const p of pcs){ const o = document.createElement('option'); o.value = p.key; o.textContent = p.label + (adjOn((s.adj || {})[p.key]) || (s.attach || {})[p.key] ? '  ✎' : ''); pick.append(o); }
+    for(const p of pcs) opt(pick, p.key, p.label + (adjOn((s.adj || {})[p.key]) || (s.attach || {})[p.key] ? '  ✎' : ''));
     pick.value = s.pcSel; pick.onchange = () => { s.pcSel = pick.value; renderPieces(); };
     field(`ชิ้น (${pcs.length} ชิ้น)`, pick);
   } else { const t = document.createElement('div'); t.className = 'pcName'; t.textContent = pc.label; body.append(t); }
-  // ติดกับส่วนไหน
-  const to = document.createElement('select'); to.setAttribute('aria-label', 'ติดกับส่วนไหน');
+  // 2) ประเภทชิ้น (ตัวเลือกหลัก)
+  const cat = document.createElement('select'); cat.setAttribute('aria-label', 'ประเภทชิ้น');
   if(s.bb){
     const b = s.bb.bones.find(x => x.name === pc.key);
     const nice = { head:'หัว', body:'ตัว', rightArm:'แขนขวา', leftArm:'แขนซ้าย', rightLeg:'ขาขวา', leftLeg:'ขาซ้าย' };
-    const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'ตามไฟล์ (' + (b && b.parent ? (nice[b.parent] || 'ชิ้น ' + b.parent) : 'ไม่ติด') + ')'; to.append(o0);
-    for(const [v, t] of Object.entries(ATTACH)){ const o = document.createElement('option'); o.value = v; o.textContent = t; to.append(o); }
-    to.value = (s.attach || {})[pc.key] || '';
-    to.onchange = () => { s.attach = { ...(s.attach || {}) }; if(to.value) s.attach[pc.key] = to.value; else delete s.attach[pc.key]; saveLocal(); updateViewer(); renderItems(); };
+    for(const [v, t] of CATS_BB) opt(cat, v, v ? t : t + ' — ติด' + (b && b.parent ? (nice[b.parent] || 'ชิ้น ' + b.parent) : 'ไม่ติด'));
+    const now = (s.attach || {})[pc.key] || '';
+    cat.value = CATS_BB.some(c => c[0] === now) ? now : '';
+    cat.onchange = () => {
+      const c = CATS_BB.find(x => x[0] === cat.value) || CATS_BB[0];
+      s.attach = { ...(s.attach || {}) };
+      if(c[2]) s.attach[pc.key] = c[2]; else delete s.attach[pc.key];
+      saveLocal(); updateViewer(); renderItems(); renderPieces();
+    };
   } else {
-    for(const [v, t] of [['body','ตัว (ขยับตามตัว)'], ['head','หัว (หันตามหัว)']]){ const o = document.createElement('option'); o.value = v; o.textContent = t; to.append(o); }
-    to.value = s.jacketHead ? 'head' : 'body';
-    to.onchange = () => { s.jacketHead = to.value === 'head'; saveLocal(); updateViewer(); };
+    for(const [v, t] of CATS_PNG) opt(cat, v, t);
+    cat.value = s.jacketHead ? 'hang' : 'shirt';
+    cat.onchange = () => {
+      const c = (CATS_PNG.find(x => x[0] === cat.value) || CATS_PNG[0])[2];
+      s.jacketHead = c.head; s.adj = { ...(s.adj || {}) };
+      if(c.adj) s.adj[pc.key] = { p: c.adj.p.slice(), r: c.adj.r.slice() }; else delete s.adj[pc.key];
+      saveLocal(); updateViewer(); renderPieces();
+    };
   }
-  field('ติดกับ', to);
-  // แถบเลื่อน/หมุน
+  field('ประเภทชิ้น', cat);
+  // 3) ปรับละเอียด (ซ่อนไว้) — แถบขยับเป็นขั้นตายตัว: เลื่อนทีละ 0.5 พิกเซล หมุนทีละ 5° ค่าถูกจำกัดช่วงทั้งตอนลากและตอนโหลด
+  const adv = document.createElement('details'); adv.className = 'pcAdv'; adv.open = !!s.pcAdvOpen;
+  adv.ontoggle = () => { s.pcAdvOpen = adv.open; };
+  const sm = document.createElement('summary'); sm.textContent = 'ปรับละเอียด (เลื่อน/หมุนเอง)' + (adjOn((s.adj || {})[pc.key]) ? ' ✎' : '');
+  adv.append(sm);
   const cur = () => { const a = (s.adj || {})[pc.key]; return a ? { p: a.p.slice(), r: a.r.slice() } : { p:[0,0,0], r:[0,0,0] }; };
   for(const [g, i, label] of ADJ_ROWS){
-    const lim = g === 'p' ? ADJ_P : ADJ_R;
+    const lim = g === 'p' ? ADJ_P : ADJ_R, step = g === 'p' ? 0.5 : 5;
     const wrap = document.createElement('div'); wrap.className = 'pcRow';
     const t = document.createElement('span'); t.className = 'pcLbl'; t.textContent = label;
     const v = document.createElement('output'); v.className = 'pcVal';
-    const r = document.createElement('input'); r.type = 'range'; r.min = -lim; r.max = lim; r.step = g === 'p' ? 0.5 : 1;
+    const r = document.createElement('input'); r.type = 'range'; r.min = -lim; r.max = lim; r.step = step;
     r.setAttribute('aria-label', label); r.value = cur()[g][i];
     const fmt = x => (x > 0 ? '+' : '') + x + (g === 'p' ? ' px' : '°');
     v.textContent = fmt(+r.value);
     r.oninput = () => {
-      const a = cur(); a[g][i] = Math.max(-lim, Math.min(lim, +r.value || 0)); v.textContent = fmt(a[g][i]);
+      const a = cur(); a[g][i] = Math.max(-lim, Math.min(lim, Math.round((+r.value || 0) / step) * step)); v.textContent = fmt(a[g][i]);
       s.adj = { ...(s.adj || {}) }; if(adjOn(a)) s.adj[pc.key] = a; else delete s.adj[pc.key];
       updateViewer();                                   // ตัวอย่างสร้างใหม่ทันที (ใช้เท็กซ์เจอร์เดิม ไม่กระพริบ)
       clearTimeout(pcSaveT); pcSaveT = setTimeout(saveLocal, 400);   // จำลงเครื่องตอนหยุดลาก
     };
     const top = document.createElement('div'); top.className = 'pcTop'; top.append(t, v);
-    wrap.append(top, r); body.append(wrap);
-  }
-  // ท่าสำเร็จรูปของลายชั้นนอกตัว (.png)
-  //   ผมห้อยหลังหัว: ติดหัว + ดันไปข้างหลัง 2.1 ให้แผ่นหลัง (z 2.25) ไปอยู่เสมอหลังหัว (z ~4.35 เลยชั้นหมวก 4.5 ไม่ได้ จะซ้อนกัน) ห้อยลงตรงๆ ไม่หมุน
-  //   ติดเสื้อแบบเดิม: ขยับตามตัว อยู่ตำแหน่งเดิมของลายบนหลังเสื้อ
-  if(pc.key === '@jacket'){
-    const pr = document.createElement('div'); pr.className = 'pcPresets';
-    for(const [label, head, a] of [['ผมห้อยหลังหัว (แนะนำ)', true, { p:[0,0,2.1], r:[0,0,0] }], ['ติดเสื้อแบบเดิม', false, null]]){
-      const b = document.createElement('button'); b.className = 'btn ghost small'; b.textContent = label;
-      b.onclick = () => { s.jacketHead = head; s.adj = { ...(s.adj || {}) }; if(a) s.adj[pc.key] = a; else delete s.adj[pc.key]; saveLocal(); updateViewer(); renderPieces(); };
-      pr.append(b);
-    }
-    body.insertBefore(pr, body.children[1] || null);
+    wrap.append(top, r); adv.append(wrap);
   }
   const rs = document.createElement('button'); rs.className = 'btn ghost small'; rs.textContent = 'รีเซ็ตเลื่อน/หมุนของชิ้นนี้';
   rs.onclick = () => { if(s.adj) delete s.adj[pc.key]; saveLocal(); updateViewer(); renderPieces(); };
-  body.append(rs);
+  adv.append(rs);
+  body.append(adv);
 }
 function updateViewer(){
   const s = state.skins[state.selected];

@@ -159,3 +159,6 @@
   .pcTip{margin-top:6px;font-size:13px;color:#00f0ff}
   .pcPresets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
   .pcPresets .btn{flex:1 1 auto}
+  /* v33: ปรับละเอียดซ่อนไว้ใต้ประเภทชิ้น */
+  .pcAdv{margin-top:4px;border-top:1px solid rgba(0,240,255,.18);padding-top:8px}
+  .pcAdv summary{cursor:pointer;font-size:13px;color:#00f0ff;padding:4px 0 8px}
