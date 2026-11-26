@@ -84,6 +84,13 @@
           <option value="chest">ช่องเสื้อ</option>
           <option value="feet">ช่องรองเท้า</option>
         </select>
+        <label for="slotOutfit">ช่องของชุด (ไฟล์ที่ตั้งเป็น "ชุด" ใส่ทับสกินอีกชั้น ต้องไม่ซ้ำช่องสกิน)</label>
+        <select id="slotOutfit">
+          <option value="chest" selected>ช่องเสื้อ</option>
+          <option value="legs">ช่องกางเกง</option>
+          <option value="head">ช่องหมวก</option>
+          <option value="feet">ช่องรองเท้า</option>
+        </select>
         <label for="nsIn">ชื่อย่อไอดีไอเทม (namespace)</label>
         <input type="text" id="nsIn" maxlength="16" value="isk" autocomplete="off" autocapitalize="off" spellcheck="false">
         <p class="note" id="nsMsg"></p>
@@ -159,6 +166,28 @@
             <li>โหมดสร้างสรรค์ → แท็บอุปกรณ์ → กลุ่มเกราะของช่องที่เลือก → หาไอเทมหน้าหัวสกิน</li>
             <li>สวมในช่องเกราะ = เห็นสกิน • ถือในมือหรือมุมมองบุคคลที่ 1 จะไม่วาด</li>
             <li>เอาชีวิตรอด: แจกด้วย <code>/give @s ชื่อไอเทม</code> (ดูชื่อใน README.txt ในแพ็ก)</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ขั้นที่ 4: รวมแอดออน (ไฟล์ .mcaddon ที่สร้างจากเว็บนี้หลายไฟล์ → แพ็กเดียว) -->
+      <section class="win" id="winMerge">
+        <h2><span class="num"></span>รวมแอดออน</h2>
+        <p class="note">รวมไฟล์ <code>.mcaddon</code> ที่สร้างจากเว็บนี้หลายไฟล์ให้เป็นแพ็กเดียว • ไอดีไอเทมเดิมครบทุกชิ้น ของที่แจกในโลกไปแล้วไม่หาย</p>
+        <!-- ไม่ใส่ accept: มือถือบางรุ่นทำไฟล์ .mcaddon เป็นสีเทา — ตรวจชนิดไฟล์ในโค้ดแทน -->
+        <label class="btn ghost" for="mergeIn">+ เลือกไฟล์ที่จะรวม</label>
+        <input type="file" id="mergeIn" multiple hidden>
+        <div class="mergeList" id="mergeList"></div>
+        <label for="mergeName">ชื่อแพ็กรวม (ชื่อในเกม)</label>
+        <input type="text" id="mergeName" maxlength="40" value="ISEKAI รวม" autocomplete="off">
+        <button class="btn full" id="btnMerge" disabled>รวมแอดออน</button>
+        <div class="msg" id="mergeMsg"></div>
+        <details>
+          <summary>หลังรวมแล้วต้องทำอะไร</summary>
+          <ol>
+            <li>นำเข้าไฟล์รวมเข้าเกม</li>
+            <li>ในโลก: <b>ปิดแพ็กเดิมที่รวมไปแล้วออก</b> (ไม่งั้นไอเทมจะซ้ำกัน) แล้วเปิดแพ็กรวมแทน</li>
+            <li>จะเพิ่มอีกทีหลัง: ใส่ <b>ไฟล์รวมเดิม + ไฟล์ใหม่</b> → ได้แพ็กรวมเดิมเวอร์ชันใหม่ นำเข้าทับได้เลย</li>
           </ol>
         </details>
       </section>

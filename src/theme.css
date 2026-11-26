@@ -162,3 +162,11 @@
   /* v33: ปรับละเอียดซ่อนไว้ใต้ประเภทชิ้น */
   .pcAdv{margin-top:4px;border-top:1px solid rgba(0,240,255,.18);padding-top:8px}
   .pcAdv summary{cursor:pointer;font-size:13px;color:#00f0ff;padding:4px 0 8px}
+  /* v34: รวมแอดออน */
+  .mergeList{margin:10px 0}
+  .mergeRow{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;background:rgba(0,240,255,.05);border:1px solid rgba(0,240,255,.2)}
+  .mergeRow > div{flex:1;min-width:0}
+  .mergeRow b{display:block;overflow-wrap:anywhere}
+  .mergeRow small{display:block;opacity:.75;font-size:12px;overflow-wrap:anywhere}
+  .mergeRow .x{flex:0 0 auto}
+  #winMerge label[for=mergeIn]{display:inline-block;margin:6px 0}

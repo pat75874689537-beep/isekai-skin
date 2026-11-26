@@ -463,6 +463,14 @@
   /* v33: ปรับละเอียดซ่อนไว้ใต้ประเภทชิ้น */
   .pcAdv{margin-top:4px;border-top:1px solid rgba(0,240,255,.18);padding-top:8px}
   .pcAdv summary{cursor:pointer;font-size:13px;color:#00f0ff;padding:4px 0 8px}
+  /* v34: รวมแอดออน */
+  .mergeList{margin:10px 0}
+  .mergeRow{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;background:rgba(0,240,255,.05);border:1px solid rgba(0,240,255,.2)}
+  .mergeRow > div{flex:1;min-width:0}
+  .mergeRow b{display:block;overflow-wrap:anywhere}
+  .mergeRow small{display:block;opacity:.75;font-size:12px;overflow-wrap:anywhere}
+  .mergeRow .x{flex:0 0 auto}
+  #winMerge label[for=mergeIn]{display:inline-block;margin:6px 0}
 </style>
 </head>
 <body>
@@ -550,6 +558,13 @@
           <option value="chest">ช่องเสื้อ</option>
           <option value="feet">ช่องรองเท้า</option>
         </select>
+        <label for="slotOutfit">ช่องของชุด (ไฟล์ที่ตั้งเป็น "ชุด" ใส่ทับสกินอีกชั้น ต้องไม่ซ้ำช่องสกิน)</label>
+        <select id="slotOutfit">
+          <option value="chest" selected>ช่องเสื้อ</option>
+          <option value="legs">ช่องกางเกง</option>
+          <option value="head">ช่องหมวก</option>
+          <option value="feet">ช่องรองเท้า</option>
+        </select>
         <label for="nsIn">ชื่อย่อไอดีไอเทม (namespace)</label>
         <input type="text" id="nsIn" maxlength="16" value="isk" autocomplete="off" autocapitalize="off" spellcheck="false">
         <p class="note" id="nsMsg"></p>
@@ -628,6 +643,28 @@
           </ol>
         </details>
       </section>
+
+      <!-- ขั้นที่ 4: รวมแอดออน (ไฟล์ .mcaddon ที่สร้างจากเว็บนี้หลายไฟล์ → แพ็กเดียว) -->
+      <section class="win" id="winMerge">
+        <h2><span class="num"></span>รวมแอดออน</h2>
+        <p class="note">รวมไฟล์ <code>.mcaddon</code> ที่สร้างจากเว็บนี้หลายไฟล์ให้เป็นแพ็กเดียว • ไอดีไอเทมเดิมครบทุกชิ้น ของที่แจกในโลกไปแล้วไม่หาย</p>
+        <!-- ไม่ใส่ accept: มือถือบางรุ่นทำไฟล์ .mcaddon เป็นสีเทา — ตรวจชนิดไฟล์ในโค้ดแทน -->
+        <label class="btn ghost" for="mergeIn">+ เลือกไฟล์ที่จะรวม</label>
+        <input type="file" id="mergeIn" multiple hidden>
+        <div class="mergeList" id="mergeList"></div>
+        <label for="mergeName">ชื่อแพ็กรวม (ชื่อในเกม)</label>
+        <input type="text" id="mergeName" maxlength="40" value="ISEKAI รวม" autocomplete="off">
+        <button class="btn full" id="btnMerge" disabled>รวมแอดออน</button>
+        <div class="msg" id="mergeMsg"></div>
+        <details>
+          <summary>หลังรวมแล้วต้องทำอะไร</summary>
+          <ol>
+            <li>นำเข้าไฟล์รวมเข้าเกม</li>
+            <li>ในโลก: <b>ปิดแพ็กเดิมที่รวมไปแล้วออก</b> (ไม่งั้นไอเทมจะซ้ำกัน) แล้วเปิดแพ็กรวมแทน</li>
+            <li>จะเพิ่มอีกทีหลัง: ใส่ <b>ไฟล์รวมเดิม + ไฟล์ใหม่</b> → ได้แพ็กรวมเดิมเวอร์ชันใหม่ นำเข้าทับได้เลย</li>
+          </ol>
+        </details>
+      </section>
     </div>
   </main>
 
@@ -703,7 +740,7 @@ const baseName = n => n.replace(EXT_RE, '').trim().toLowerCase();
 
 // ---------- บันทึก/โหลดโปรเจกต์ในเครื่อง ----------
 function saveLocal(){
-  const base = { project: state.project, ns: state.ns, packName: $('packName').value, packVer: $('packVer').value, slot: $('slot').value };
+  const base = { project: state.project, ns: state.ns, packName: $('packName').value, packVer: $('packVer').value, slot: $('slot').value, slotOutfit: $('slotOutfit').value };
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({ ...base, skins: state.skins })); return true; }
   catch(e){
     // สกิน HD ใหญ่เกินพื้นที่ในเครื่อง → จำแค่การตั้งค่า + UUID (สำคัญที่สุด จะได้ทับของเดิมได้)
@@ -726,13 +763,16 @@ function loadLocal(){
     if(Array.isArray(d.skins)) state.skins = d.skins.filter(s => s && typeof s.dataUrl === 'string' && s.dataUrl.startsWith('data:image/png') && s.px > 0);
     state.skins.forEach(s => { if(s.bb && s.bb.bones) sanitizeBones(s.bb.bones); delete s.fx; if(!/\p{L}/u.test(s.name || '')) s.name = ''; s.attach = cleanAttach(s);
       if(s.special && s.parts && s.parts.body === false && s.parts.arms === false && s.parts.legs === false && !s.partsByUser) s.parts = undefined;   // v29: ส่วนที่ระบบเคยปิดเอง เปิดคืน
-      s.jacketHead = s.jacketHead === true; s.adj = cleanAdj(s); });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
+      s.jacketHead = s.jacketHead === true; s.adj = cleanAdj(s);
+      s.kind = s.kind === 'outfit' ? 'outfit' : 'skin';   // สกินจากรุ่นก่อน v34 = สกิน (ไม่เปลี่ยนผลเดิม)
+      if(typeof s.tryOn !== 'string') delete s.tryOn; });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
     const p = d.project;
     const isU = u => typeof u === 'string' && /^[0-9a-f-]{36}$/i.test(u);
     if(p && /^[a-z0-9]{5}$/.test(p.code) && isU(p.bp) && isU(p.bpm) && isU(p.rp) && isU(p.rpm)) state.project = p;
     if(d.packName) $('packName').value = cleanName(d.packName);
     if(d.packVer) $('packVer').value = String(d.packVer).slice(0,12);
     if(['legs','head','chest','feet'].includes(d.slot)) $('slot').value = d.slot;
+    if(['legs','head','chest','feet'].includes(d.slotOutfit)) $('slotOutfit').value = d.slotOutfit;
     if(validNs(d.ns)) state.ns = d.ns;
     $('nsIn').value = state.ns;
     // เลขไอเทมประจำสกิน (ไม่เปลี่ยนตามลำดับ ลบสกินอื่นแล้วไอดีไม่เลื่อน) — สกินที่จำไว้จากรุ่นก่อนใช้ลำดับเดิม = ไอดีเดิม
@@ -832,16 +872,20 @@ const REG = {
    โมเดลมาตรฐาน (สูตรข้อ 2.5) — ใส่เฉพาะชิ้นที่สกินมีพิกเซล
    bones รูปแบบเดียวกับไฟล์ .geo.json ของ Bedrock
    ===================================================================== */
-function standardBones(has, slim, jacketHead){
-  const aw = slim ? 3 : 4, rx = slim ? -7 : -8;
-  const C = (o, sz, uv, inf) => inf ? { origin:o, size:sz, uv, inflate:inf } : { origin:o, size:sz, uv };
+// ชุดใส่ทับสกิน: ดันออกแค่ 0.01 พิกเซล (ภัทรสั่ง 27 พ.ย. 2026) — ตามองไม่เห็นว่าใหญ่ขึ้น แต่กันภาพกระพริบ
+//   ตรงที่ชุดกับไอเทมสกินมีลายทับกันพอดี • ชั้นในของชุด +0.01 • ชั้นนอกของชุด +0.26
+const OUTFIT_INF = 0.01;
+function standardBones(has, slim, jacketHead, outfit){
+  const aw = slim ? 3 : 4, rx = slim ? -7 : -8, add = outfit ? OUTFIT_INF : 0;
+  const C = (o, sz, uv, inf) => { const f = r4((inf || 0) + add); return f ? { origin:o, size:sz, uv, inflate:f } : { origin:o, size:sz, uv }; };
   const part = (name, pivot, list) => {
     const cubes = list.filter(x => x[0]).map(x => x[1]);
     return cubes.length ? { name, pivot, cubes } : null;
   };
   return [
-    // หัว + ชั้นหมวกใส่เสมอ (หัวคือหัวใจของสกิน ISK)
-    { name:'head', pivot:[0,24,0], cubes:[ C([-4,24,-4],[8,8,8],[0,0]), C([-4,24,-4],[8,8,8],[32,0],0.5) ] },
+    // หัว + ชั้นหมวกใส่เสมอ (หัวคือหัวใจของสกิน ISK) • ชุด: ใส่เฉพาะชั้นที่มีลาย (ไม่มีลาย = bone เปล่า ไว้ให้ชิ้นอื่นต่อ)
+    outfit ? (part('head', [0,24,0], [[has.head, C([-4,24,-4],[8,8,8],[0,0])], [has.hat, C([-4,24,-4],[8,8,8],[32,0],0.5)]]) || { name:'head', pivot:[0,24,0] })
+           : { name:'head', pivot:[0,24,0], cubes:[ C([-4,24,-4],[8,8,8],[0,0]), C([-4,24,-4],[8,8,8],[32,0],0.5) ] },
     part('body', [0,24,0], [[has.body, C([-4,12,-2],[8,12,4],[16,16])], [has.jacket && !jacketHead && jacketHead !== 'body', C([-4,12,-2],[8,12,4],[16,32],0.25)]]),
     // ชั้นนอกตัวที่ผู้ใช้เลือกให้ตามหัว: แยกเป็น bone ลูกของหัว หมุนรอบคอ (ผมยาวที่วาดบนหลังเสื้อหันตามหัว)
     jacketHead === true && has.jacket ? { name:'jacket_head', parent:'head', pivot:[0,24,0], cubes:[ C([-4,12,-2],[8,12,4],[16,32],0.25) ] } : null,
@@ -1024,7 +1068,9 @@ async function makeSkinFromImage(name, url){
   const parts = undefined;
   return { id: Date.now() + '_' + Math.random().toString(36).slice(2,7), k: nextK(),   // k = เลขไอเทมประจำสกิน (สกินถูก push ทันทีหลังสร้าง เลขจึงไม่ซ้ำ)
            name: cleanName(name),   // ว่างได้ = ให้ผู้ใช้พิมพ์ชื่อเอง (ช่องขึ้นว่า "ใส่ชื่อสกิน")
-           model: 'auto', slimAuto: a.slim, has: a.has, extra: a.extra, special: a.special, parts, dataUrl: url, px: img.width, bb: null, bbName: '' };
+           model: 'auto', slimAuto: a.slim, has: a.has, extra: a.extra, special: a.special, parts, dataUrl: url, px: img.width, bb: null, bbName: '',
+           // ไม่มีลายหัวเลย แต่มีลายตัว/แขน/ขา = ไฟล์ชุด → ตั้งเป็น "ชุดใส่ทับสกิน" ให้เอง (ผู้ใช้เปลี่ยนได้)
+           kind: (!a.has.head && !a.has.hat && Object.entries(a.has).some(([k, v]) => v && k !== 'head' && k !== 'hat')) ? 'outfit' : 'skin' };
 }
 async function addFiles(files){
   const msgs = [], warns = [];
@@ -1107,8 +1153,13 @@ async function faceCanvas(s, size, bg){
   const k = img.width / 64;
   const src = document.createElement('canvas'); src.width = src.height = Math.round(8*k);
   const g = src.getContext('2d'); g.imageSmoothingEnabled = false;
-  g.drawImage(img, 8*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);   // หน้า
-  g.drawImage(img, 40*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);  // ชั้นหมวกทับ (alpha over)
+  if(s.kind === 'outfit'){   // ชุด: ไอคอนเป็นหน้าอก (ตัวด้านหน้า 8×12 + ชั้นนอก) วางกลางช่องสี่เหลี่ยม
+    g.drawImage(img, 20*k, 20*k, 8*k, 12*k, 1.33*k, 0, 5.33*k, 8*k);
+    g.drawImage(img, 20*k, 36*k, 8*k, 12*k, 1.33*k, 0, 5.33*k, 8*k);
+  } else {
+    g.drawImage(img, 8*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);   // หน้า
+    g.drawImage(img, 40*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);  // ชั้นหมวกทับ (alpha over)
+  }
   const c = document.createElement('canvas'); c.width = c.height = size;
   const o = c.getContext('2d');
   if(bg){ o.fillStyle = bg; o.fillRect(0, 0, size, size); }
@@ -1205,6 +1256,8 @@ function addGeo(geo, mat){
   return objs;
 }
 // เท็กซ์เจอร์สกินที่ใช้อยู่ เก็บไว้ใช้ซ้ำ — ตอนลากแถบปรับชิ้นพิเศษ ตัวอย่างสร้างใหม่ถี่ๆ ไม่ต้องโหลดรูปใหม่ (ไม่กระพริบ)
+// สกินที่ใช้ลองชุด: ที่ผู้ใช้เลือก (s.tryOn = id) ถ้าไม่มี/ถูกลบไปแล้ว = ไม่ใส่
+function tryOnOf(s){ return s.tryOn ? state.skins.find(x => x.id === s.tryOn && x.kind !== 'outfit') || null : null; }
 function skinTex(url){
   if(V.tc && V.tc.url === url) return V.tc.tex;
   if(V.tc) V.tc.tex.dispose();
@@ -1225,6 +1278,9 @@ async function buildPreview(s){
   V.root = new THREE.Group(); V.root.scale.set(1, 1, -1);
   const outer = new THREE.Group(); outer.add(V.root); outer.position.y = -13; V.scene.add(outer); V.outer = outer;
   addGeo(geo, mat);
+  // ชุด: ลองใส่ทับสกินที่เลือก (วาดสกินนั้นด้วยเท็กซ์เจอร์ของมันเอง ใต้ชุด)
+  const base = s.kind === 'outfit' ? tryOnOf(s) : null;
+  if(base){ addGeo(geometryOf(base), new THREE.MeshBasicMaterial({ map: texOf(base.dataUrl), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true })); }
   // ร่างเทา (ร่างผู้เล่นใต้สกิน) — หดเล็กน้อยให้เห็นส่วนโปร่งใสของสกิน แบบพรีวิวในสูตร
   V.gray = new THREE.Group(); V.root.add(V.gray);
   const aw = modelOf(s) === 'slim' ? 3 : 4;
@@ -1307,7 +1363,7 @@ const adjOn = a => !!a && (a.p.some(v => v) || a.r.some(v => v));
 function piecesOf(s){
   if(s.bb) return attachable(s.bb.bones).map(b => ({ key: b.name, label: b.name }));
   const h = s.has || {};
-  if(h.jacket && (s.parts || {}).body !== false) return [{ key: '@jacket', label: 'ลายชั้นนอกของตัว (ผมที่วาดบนหลัง)' }];
+  if(s.kind !== 'outfit' && h.jacket && (s.parts || {}).body !== false) return [{ key: '@jacket', label: 'ลายชั้นนอกของตัว (ผมที่วาดบนหลัง)' }];
   return [];
 }
 // เลื่อน/หมุนชิ้นหนึ่ง: เลื่อน = ย้ายจุดหมุนและทุกกล่องของชิ้นนั้นกับชิ้นลูกทั้งหมด • หมุน = บวกเพิ่มที่ bone (ลูกหมุนตาม)
@@ -1336,6 +1392,8 @@ function cleanAdj(s){
 function geometryOf(s){
   if(s.bb){
     let bones = applyAttach(s.bb.bones, s.attach);
+    // ชุดจาก .bbmodel: ดันทุกกล่องออก OUTFIT_INF (0.01) แบบเดียวกับชุด .png
+    if(s.kind === 'outfit' && OUTFIT_INF) bones = bones.map(b => b.cubes ? { ...b, cubes: b.cubes.map(c => ({ ...c, inflate: r4((c.inflate || 0) + OUTFIT_INF) })) } : b);
     for(const [k, a] of Object.entries(s.adj || {})) if(bones.some(b => b.name === k)) bones = applyAdj(bones, k, a);
     return { bones, texW: s.bb.texW, texH: s.bb.texH };
   }
@@ -1346,8 +1404,8 @@ function geometryOf(s){
   if(pt.legs === false) has.rLeg = has.rPants = has.lLeg = has.lPants = false;
     // ลายชั้นนอกตัว: ติดหัว หรือมีค่าปรับ → แยกเป็นชิ้นของตัวเอง (ไม่ปรับอะไร = รวมกับตัวแบบเดิม)
   const ja = (s.adj || {})['@jacket'];
-  const jmode = s.jacketHead ? true : (adjOn(ja) ? 'body' : false);
-  let bones = standardBones(has, modelOf(s) === 'slim', jmode);
+  const jmode = s.kind === 'outfit' ? false : s.jacketHead ? true : (adjOn(ja) ? 'body' : false);
+  let bones = standardBones(has, modelOf(s) === 'slim', jmode, s.kind === 'outfit');
   if(jmode && has.jacket){
     if(jmode === 'body' && !bones.some(b => b.name === 'body')) bones.splice(1, 0, { name: 'body', pivot: [0,24,0] });   // ตัวไม่มีลาย แต่ชิ้นต้องมีที่ติด
     bones = applyAdj(bones, jmode === true ? 'jacket_head' : 'jacket_piece', ja);
@@ -1391,6 +1449,23 @@ async function render(){
     name.oninput = () => { s.name = cleanName(name.value); name.classList.toggle('need', !s.name); saveLocal(); renderItems(); if(i === state.selected) $('vTag').textContent = s.name || 'ยังไม่ตั้งชื่อ'; };
     name.onclick = e => e.stopPropagation();
     mid.append(name);
+    // ใช้เป็น: สกิน (หัว+ตัว ใส่คู่สกินล่องหน) หรือ ชุด (ใส่ทับไอเทมสกินอีกชั้น คนละช่องเกราะ)
+    const kd = document.createElement('select'); kd.setAttribute('aria-label', 'ใช้เป็น');
+    kd.innerHTML = '<option value="skin">สกิน (หัว+ตัว)</option><option value="outfit">ชุด (ใส่ทับสกิน)</option>';
+    kd.value = s.kind === 'outfit' ? 'outfit' : 'skin'; kd.onclick = e => e.stopPropagation();
+    kd.onchange = () => { s.kind = kd.value; if(s.kind !== 'outfit') delete s.tryOn; saveLocal(); render(); };
+    mid.append(kd);
+    if(s.kind === 'outfit'){
+      const skinsOnly = state.skins.filter(x => x.kind !== 'outfit');
+      if(skinsOnly.length){
+        const tr = document.createElement('select'); tr.setAttribute('aria-label', 'ลองใส่ชุดกับสกิน');
+        const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'ลองกับ: ร่างเทา'; tr.append(o0);
+        for(const x of skinsOnly){ const o = document.createElement('option'); o.value = x.id; o.textContent = 'ลองกับ: ' + (x.name || '(ยังไม่ตั้งชื่อ)'); tr.append(o); }
+        tr.value = tryOnOf(s) ? s.tryOn : ''; tr.onclick = e => e.stopPropagation();
+        tr.onchange = () => { if(tr.value) s.tryOn = tr.value; else delete s.tryOn; state.selected = i; saveLocal(); render(); };
+        mid.append(tr);
+      }
+    }
     if(!s.bb){ // แขนเล็ก/ปกติ มีผลเฉพาะโมเดลมาตรฐาน
       const sel = document.createElement('select');
       sel.innerHTML = `<option value="auto">แขน: อัตโนมัติ (${s.slimAuto ? 'เล็ก' : 'ปกติ'})</option><option value="classic">แขนปกติ (Steve)</option><option value="slim">แขนเล็ก (Alex)</option>`;
@@ -1416,13 +1491,13 @@ async function render(){
     const parts = geo.bones.filter(b => b.cubes && b.cubes.length).map(b => b.name);
     meta.innerHTML = `รูป ${s.px}×${s.px} • ${s.bb ? 'โมเดล: <b>' + esc(s.bbName) + '</b>' : 'โมเดลมาตรฐาน'}<br>ชิ้น: ${esc(parts.join(', '))}`;
     // เตือน: สกินมีชิ้นผม/ระนาบพิเศษ แต่ยังไม่มี .bbmodel → ผมจะไปอยู่ผิดที่
-    if(!s.bb && s.special){   // แค่แนะนำ: สกินนี้น่าจะทำมาคู่กับ .bbmodel (ใส่หรือไม่ใส่ก็สร้างได้)
+    if(!s.bb && s.special && s.kind !== 'outfit'){   // แค่แนะนำ: สกินนี้น่าจะทำมาคู่กับ .bbmodel (ใส่หรือไม่ใส่ก็สร้างได้)
       const w = document.createElement('div'); w.className = 'needbb soft';
       w.innerHTML = 'ℹ สกินนี้มีชิ้นพิเศษ ตอนนี้แสดงแบบ Blockbench แล้ว • ถ้ามี <b>.bbmodel</b> ของสกินนี้ ใส่เพิ่มได้ ชิ้นพิเศษจะอยู่ตรงตำแหน่งที่ออกแบบไว้';
       meta.append(w);
     }
     // เตือนรูโปร่งใส (เฉพาะโมเดลมาตรฐาน ส่วนที่เลือกใส่)
-    if(!s.bb && !s.special && s.holes && s.holes.length){
+    if(!s.bb && !s.special && s.kind !== 'outfit' && s.holes && s.holes.length){
       const on = { 'หัว': true, 'ตัว': (s.parts || {}).body !== false, 'แขน': (s.parts || {}).arms !== false, 'ขา': (s.parts || {}).legs !== false };
       const hs = s.holes.filter(h => on[h.part]);
       if(hs.length){ const w = document.createElement('div'); w.className = 'holeWarn';
@@ -1477,7 +1552,7 @@ async function renderItems(){
     const slot = document.createElement('div'); slot.className = 'invSlot';
     const ic = await faceCanvas(s, 64, null); ic.className = 'invIcon'; slot.append(ic);
     const txt = document.createElement('div'); txt.className = 'itemTxt';
-    const nm = document.createElement('b'); nm.textContent = s.name || '(ยังไม่ตั้งชื่อ)';
+    const nm = document.createElement('b'); nm.textContent = (s.name || '(ยังไม่ตั้งชื่อ)') + (s.kind === 'outfit' ? '  · ชุด' : '');
     const cmd = `/give @s ${itemId(s)}`;
     const code = document.createElement('code'); code.textContent = cmd;
     txt.append(nm, code);
@@ -1616,7 +1691,7 @@ function updateViewer(){
   // ข้อมูลเล็กมุมขวาบนของเวที: ขนาดรูป + จำนวนชิ้นในโมเดล
   $('hudInfo').textContent = `${s.px}px • ${geometryOf(s).bones.reduce((n, b) => n + (b.cubes ? b.cubes.length : 0), 0)} ชิ้น`;
   if(!window.THREE){ $('vTag').textContent += ' (โหลดตัวโชว์ 3D ไม่ได้ ต้องต่อเน็ต)'; return; }
-  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {}) + '|' + !!s.jacketHead + '|' + JSON.stringify(s.adj || {});
+  const key = s.id + '|' + modelOf(s) + '|' + (s.bbName || '') + '|' + JSON.stringify(s.parts || {}) + '|' + JSON.stringify(s.attach || {}) + '|' + !!s.jacketHead + '|' + JSON.stringify(s.adj || {}) + '|' + (s.kind || '') + '|' + (s.kind === 'outfit' ? tryOnOf(s)?.id || '' : '');
   if(V.key !== key){ V.key = key; buildPreview(s); }
 }
 
@@ -1649,7 +1724,7 @@ function buildFiles(opt){
 
   const texData = {}, readme = [];
   for(const s of opt.skins){
-    const N = s.key, id = `${opt.ns || 'isk'}:${N}`;
+    const N = s.key, id = `${opt.ns || 'isk'}:${N}`, sl = SLOT[s.slotKey] || SLOT[opt.slotKey];   // แต่ละไอเทมมีช่องของตัวเอง (สกิน/ชุด)
     // ไอเทม (BP) — 1.21.60 ขึ้นไป ไม่งั้นชื่อกลุ่มแบบ minecraft: ไม่ทำงาน
     J(`${BP}items/${N}.json`, { format_version: '1.21.60', 'minecraft:item': {
       description: { identifier: id, menu_category: { category: 'equipment', group: sl.group } },
@@ -1672,13 +1747,13 @@ function buildFiles(opt){
     files.push({ path: `${RP}textures/isk/${N}/skin.png`, data: s.png });
     files.push({ path: `${RP}textures/items/${N}.png`, data: s.icon });
     texData[`isk_${N}`] = { textures: `textures/items/${N}` };
-    readme.push(`  - ${s.name}  →  /give @s ${id}`);
+    readme.push(`  - ${s.name} (ช่อง${sl.th})  →  /give @s ${id}`);
   }
   J(`${RP}textures/item_texture.json`, { resource_pack_name: `isk_${P.code}`, texture_name: 'atlas.items', texture_data: texData });
   if(opt.packIcon) for(const p of [BP, RP]) files.push({ path: p + 'pack_icon.png', data: opt.packIcon });
   const txt = [
     `${opt.packName} v${opt.ver.join('.')} — แอดออนสกิน ISEKAI (สร้างจากเว็บ ISEKAI สตูดิโอแปลงสกิน)`,
-    ``, `วิธีใช้: ใช้สกินล่องหนเป็นสกินหลัก → เปิด BP ในโลก → สวมไอเทมในช่อง${sl.th}`,
+    ``, `วิธีใช้: ใช้สกินล่องหนเป็นสกินหลัก → เปิด BP ในโลก → สวมไอเทมสกิน แล้วใส่ไอเทมชุดทับได้อีกชั้น (คนละช่องเกราะ)`,
     `ถือในมือ / มุมมองบุคคลที่ 1 จะไม่วาด (ไม่บังจอ)`, ``, `ไอเทม:`, ...readme, ``,
     `สำหรับคนแก้ต่อ: โครงไฟล์ตาม SKIN_ADDON_RECIPE.md (ISK) ข้อ 1-2 • สกินเปล่า ไม่มีฟังชั่นเสริม`,
     `  รหัสโปรเจกต์ ${P.code} • UUID ต้องคงเดิม เปลี่ยนแค่ version ทุกครั้งที่อัปเดต`
@@ -1782,13 +1857,16 @@ async function build(){
     const noName = state.skins.map((s, i) => !cleanName(s.name) ? i + 1 : 0).filter(Boolean);
     if(noName.length){ document.querySelectorAll('#list .skin input.need')[0]?.focus();
       return show(msg, 'err', `ยังสร้างไม่ได้: ใส่ชื่อสกินก่อน (สกินลำดับที่ ${noName.join(', ')}) • ชื่อนี้จะเป็นชื่อไอเทมในเกม`); }
+    // ชุดต้องอยู่คนละช่องเกราะกับสกิน ไม่งั้นใส่พร้อมกันไม่ได้
+    if(state.skins.some(x => x.kind === 'outfit') && state.skins.some(x => x.kind !== 'outfit') && $('slotOutfit').value === $('slot').value)
+      return show(msg, 'err', 'ยังสร้างไม่ได้: ช่องของชุดซ้ำกับช่องของสกิน → เลือก "ช่องของชุด" เป็นช่องอื่นในขั้นตั้งค่า');
     const seen = {}, skins = [];
     for(let i = 0; i < state.skins.length; i++){
       const s = state.skins[i];
       let nm = cleanName(s.name) || 'สกิน';
       seen[nm] = (seen[nm] || 0) + 1; if(seen[nm] > 1) nm += ' ' + seen[nm];
       const icon = await faceCanvas(s, 64, null);
-      skins.push({ name: nm, key: `${state.project.code}_${s.k}`, geo: geometryOf(s),
+      skins.push({ name: nm, key: `${state.project.code}_${s.k}`, geo: geometryOf(s), slotKey: s.kind === 'outfit' ? $('slotOutfit').value : $('slot').value,
                    png: dataUrlBytes(s.dataUrl), icon: dataUrlBytes(icon.toDataURL('image/png')) });
     }
     const pk = await faceCanvas(state.skins[0], 256, '#0C0F1E');
@@ -1902,7 +1980,158 @@ $('btnNewId').onclick = () => {
   saveLocal(); render();
   show($('newIdMsg'), 'ok', 'ได้ไอดีแพ็กใหม่แล้ว (เวอร์ชันเริ่มที่ 1) • กดสร้างแอดออนใหม่ แล้วนำเข้าเกม');
 };
-['packName','packVer','slot'].forEach(id => $(id).addEventListener('change', saveLocal));
+['packName','packVer','slot','slotOutfit'].forEach(id => $(id).addEventListener('change', saveLocal));
+
+/* =====================================================================
+   รวมแอดออน (ขั้นที่ 4): .mcaddon จากเว็บนี้หลายไฟล์ → แพ็กเดียว
+   - อ่านเฉพาะไฟล์ที่รู้จัก (items / attachables / render_controllers / models / textures / item_texture) — อย่างอื่นไม่แตะ
+   - ไอดีไอเทม (namespace:รหัส_เลข) เดิมทุกตัว → ของในโลกไม่หาย • ไอเทมซ้ำ = เก็บจากแพ็กเวอร์ชันใหม่กว่า
+   - ถ้ามีไฟล์รวมเดิมอยู่ในชุด → ใช้ไอดีแพ็กเดิม + เวอร์ชันใหม่ (นำเข้าทับได้) • ไม่มี → ไอดีแพ็กใหม่ เวอร์ชัน 1
+   - กันไฟล์อันตราย: จำกัดจำนวน/ขนาด, ชื่อไฟล์ต้องเป็น a-z0-9_, JSON อ่านแล้วเขียนใหม่ทั้งหมด
+   ===================================================================== */
+const MERGE_MARK = '[ISEKAI-MERGE]';
+const MERGE_MAX_FILES = 30, MERGE_MAX_BYTES = 200 * 1024 * 1024, MERGE_MAX_ENTRY = 40 * 1024 * 1024;
+const merge = { packs: [] };   // { file, name, ver, items:{id: {...}}, isMerge, man:{bp,rp}, code, icon }
+const verCmp = (a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]);
+async function readMergePack(f){
+  if(f.size > MERGE_MAX_BYTES) throw new Error('ไฟล์ใหญ่เกิน 200MB');
+  const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+  if(!(head[0] === 0x50 && head[1] === 0x4B)) throw new Error('ไม่ใช่ไฟล์ .mcaddon / .zip');
+  const zip = await JSZip.loadAsync(f);
+  const names = Object.keys(zip.files);
+  if(names.length > 20000) throw new Error('ไฟล์ข้างในเยอะผิดปกติ');
+  let budget = MERGE_MAX_BYTES;
+  const read = async (path, kind) => {
+    const e = zip.file(path); if(!e) return null;
+    const sz = e._data && e._data.uncompressedSize;
+    if(sz > MERGE_MAX_ENTRY) throw new Error('มีไฟล์ข้างในใหญ่ผิดปกติ: ' + path.split('/').pop());
+    const d = await e.async(kind); budget -= kind === 'string' ? d.length * 2 : d.length;
+    if(budget < 0) throw new Error('เนื้อไฟล์ใหญ่เกินไป'); return d;
+  };
+  const readJ = async path => { const t = await read(path, 'string'); if(t == null) return null; try{ return JSON.parse(t); }catch(e){ throw new Error('JSON เสีย: ' + path.split('/').pop()); } };
+  // หาโฟลเดอร์แพ็ก (อาจซ้อนในโฟลเดอร์อีกชั้น)
+  const bpMan = names.find(n => /(^|\/)[^/]+_BP\/manifest\.json$/.test(n));
+  const rpMan = names.find(n => /(^|\/)[^/]+_RP\/manifest\.json$/.test(n));
+  if(!bpMan || !rpMan) throw new Error('ไม่เจอแพ็ก BP/RP ข้างใน (ไม่ใช่ไฟล์จากเว็บนี้)');
+  const BP = bpMan.slice(0, -'manifest.json'.length), RP = rpMan.slice(0, -'manifest.json'.length);
+  const mb = await readJ(bpMan), mr = await readJ(rpMan);
+  const isk = x => x && x.metadata && Array.isArray(x.metadata.authors) && x.metadata.authors.includes('ISK');
+  if(!isk(mb) || !isk(mr) || !mb.header || !mr.header) throw new Error('ไม่ใช่ไฟล์ที่สร้างจากเว็บนี้');
+  const ver = (Array.isArray(mb.header.version) && mb.header.version.length === 3 && mb.header.version.every(n => Number.isInteger(n) && n >= 0)) ? mb.header.version : [1,0,0];
+  const readme = (await read(BP + 'README.txt', 'string')) || '';
+  const tex = (await readJ(RP + 'textures/item_texture.json')) || {};
+  const items = {};
+  for(const path of names.filter(n => n.startsWith(BP + 'items/') && n.endsWith('.json'))){
+    const N = path.slice((BP + 'items/').length, -5);
+    if(!/^[A-Za-z0-9_]{1,40}$/.test(N)) continue;                                    // ชื่อแปลก = ไม่ใช่ของเว็บนี้ ข้าม
+    const item = await readJ(path);
+    const id = item && item['minecraft:item'] && item['minecraft:item'].description && item['minecraft:item'].description.identifier;
+    if(typeof id !== 'string' || !/^[a-z0-9_]{1,16}:[A-Za-z0-9_]{1,40}$/.test(id)) continue;
+    const parts = {
+      item, att: await readJ(`${RP}attachables/${N}.json`), rc: await readJ(`${RP}render_controllers/${N}.render_controllers.json`),
+      geo: await readJ(`${RP}models/entity/${N}.geo.json`),
+      skin: await read(`${RP}textures/isk/${N}/skin.png`, 'uint8array'), icon: await read(`${RP}textures/items/${N}.png`, 'uint8array'),
+      texEntry: tex.texture_data && tex.texture_data['isk_' + N] };
+    if(!parts.att || !parts.rc || !parts.geo || !parts.skin || !parts.icon) continue;    // ไม่ครบ = ข้าม (รายงานจำนวนให้ผู้ใช้เห็น)
+    const comp = item['minecraft:item'].components || {};
+    items[id] = { N, ...parts, name: (comp['minecraft:display_name'] || {}).value || id, slot: ((comp['minecraft:wearable'] || {}).slot || '') };
+  }
+  const code = (bpMan.match(/ISK_([a-z0-9]{1,12})_BP\//) || [])[1] || '';
+  return { file: f.name, name: String(mb.header.name || '').replace(/ BP$/, ''), ver, items, isMerge: readme.includes(MERGE_MARK),
+           man: { bp: mb, rp: mr }, code, icon: await read(BP + 'pack_icon.png', 'uint8array'), min: mb.header.min_engine_version };
+}
+function renderMergeList(){
+  const box = $('mergeList'); box.textContent = '';
+  merge.packs.forEach((p, i) => {
+    const r = document.createElement('div'); r.className = 'mergeRow';
+    const t = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = p.name || p.file;
+    const sm = document.createElement('small'); sm.textContent = `${p.file} • ${Object.keys(p.items).length} ไอเทม • v${p.ver.join('.')}` + (p.isMerge ? ' • ไฟล์รวมเดิม' : '');
+    t.append(b, sm);
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '✕'; x.setAttribute('aria-label', 'เอาออก ' + (p.name || p.file));
+    x.onclick = () => { merge.packs.splice(i, 1); renderMergeList(); };
+    r.append(t, x); box.append(r);
+  });
+  $('btnMerge').disabled = merge.packs.length < 2;
+}
+$('mergeIn').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const msg = $('mergeMsg'), errs = [];
+  if(!window.JSZip) return show(msg, 'err', 'โหลดตัวอ่านไฟล์ zip ไม่ได้ ลองรีเฟรชหน้า (ต้องต่อเน็ต)');
+  show(msg, 'warn', 'กำลังอ่านไฟล์…');
+  for(const f of files){
+    if(merge.packs.length >= MERGE_MAX_FILES){ errs.push(`รวมได้สูงสุด ${MERGE_MAX_FILES} ไฟล์`); break; }
+    try{ const p = await readMergePack(f); if(!Object.keys(p.items).length) throw new Error('ไม่มีไอเทมสกินข้างใน'); merge.packs.push(p); }
+    catch(err){ errs.push(`${esc(f.name)}: ${esc(err.message || err)}`); }
+  }
+  renderMergeList();
+  const mp = merge.packs.find(p => p.isMerge); if(mp && mp.name) $('mergeName').value = mp.name;
+  if(errs.length) show(msg, 'err', errs.join('<br>'));
+  else show(msg, merge.packs.length >= 2 ? 'ok' : 'warn', merge.packs.length >= 2 ? `พร้อมรวม ${merge.packs.length} ไฟล์` : 'ใส่อย่างน้อย 2 ไฟล์');
+};
+$('btnMerge').onclick = async () => {
+  const msg = $('mergeMsg'), btn = $('btnMerge');
+  if(merge.packs.length < 2) return show(msg, 'err', 'ใส่อย่างน้อย 2 ไฟล์');
+  btn.disabled = true;
+  try{
+    const name = cleanName($('mergeName').value) || 'ISEKAI รวม';
+    // ตัวตนแพ็ก: มีไฟล์รวมเดิม (เวอร์ชันใหม่สุด) → ใช้ UUID เดิม เวอร์ชัน +1 • ไม่มี → ใหม่ทั้งหมด
+    const old = merge.packs.filter(p => p.isMerge).sort((a, b) => verCmp(b.ver, a.ver))[0];
+    const P = old ? { code: old.code || randCode(), bp: old.man.bp.header.uuid, bpm: old.man.bp.modules[0].uuid, rp: old.man.rp.header.uuid, rpm: old.man.rp.modules[0].uuid }
+                  : { code: randCode(), bp: uuid(), bpm: uuid(), rp: uuid(), rpm: uuid() };
+    const ver = old ? [old.ver[0] + 1, 0, 0] : [1, 0, 0];
+    // รวมไอเทม: ไอดีซ้ำ → เก็บจากแพ็กเวอร์ชันใหม่กว่า
+    const pick = {}, dup = [];
+    for(const p of merge.packs) for(const [id, it] of Object.entries(p.items)){
+      if(pick[id]){ dup.push(it.name); if(verCmp(p.ver, pick[id].ver) <= 0) continue; }
+      pick[id] = { ...it, ver: p.ver };
+    }
+    // ชื่อไฟล์ข้างในซ้ำกันแต่คนละไอดี (แทบเป็นไปไม่ได้) → ไม่รวม กันไฟล์ทับกัน
+    const byN = {};
+    for(const [id, it] of Object.entries(pick)){ if(byN[it.N] && byN[it.N] !== id) throw new Error('ไฟล์ข้างในชื่อชนกัน: ' + it.N); byN[it.N] = id; }
+    const BP = `ISK_${P.code}_BP/`, RP = `ISK_${P.code}_RP/`, files = [];
+    const J = (path, o) => files.push({ path, data: JSON.stringify(o, null, 2) });
+    const ME = merge.packs.map(p => Array.isArray(p.min) && p.min.length === 3 ? p.min : [1,21,60]).sort(verCmp).pop();
+    const meta = { authors: ['ISK'] }, desc = `${name} - แพ็กรวมสกิน ISEKAI v${ver.join('.')}`;
+    J(BP + 'manifest.json', { format_version: 2, header: { name: name + ' BP', description: desc, uuid: P.bp, version: ver, min_engine_version: ME },
+      modules: [{ type: 'data', uuid: P.bpm, version: ver }], dependencies: [{ uuid: P.rp, version: ver }], metadata: meta });
+    J(RP + 'manifest.json', { format_version: 2, header: { name: name + ' RP', description: desc, uuid: P.rp, version: ver, min_engine_version: ME },
+      modules: [{ type: 'resources', uuid: P.rpm, version: ver }], metadata: meta });
+    const texData = {}, readme = [];
+    const SLOT_TH = { 'slot.armor.head':'หมวก', 'slot.armor.chest':'เสื้อ', 'slot.armor.legs':'กางเกง', 'slot.armor.feet':'รองเท้า' };
+    for(const [id, it] of Object.entries(pick).sort((a, b) => a[0].localeCompare(b[0]))){
+      const N = it.N;
+      J(`${BP}items/${N}.json`, it.item); J(`${RP}attachables/${N}.json`, it.att);
+      J(`${RP}render_controllers/${N}.render_controllers.json`, it.rc); J(`${RP}models/entity/${N}.geo.json`, it.geo);
+      files.push({ path: `${RP}textures/isk/${N}/skin.png`, data: it.skin }, { path: `${RP}textures/items/${N}.png`, data: it.icon });
+      texData['isk_' + N] = it.texEntry && typeof it.texEntry.textures === 'string' ? { textures: it.texEntry.textures } : { textures: `textures/items/${N}` };
+      readme.push(`  - ${cleanName(it.name)} (ช่อง${SLOT_TH[it.slot] || '?'})  →  /give @s ${id}`);
+    }
+    J(`${RP}textures/item_texture.json`, { resource_pack_name: `isk_${P.code}`, texture_name: 'atlas.items', texture_data: texData });
+    const icon = (merge.packs.find(p => p.icon) || {}).icon;
+    if(icon) for(const p of [BP, RP]) files.push({ path: p + 'pack_icon.png', data: icon });
+    const txt = [`${name} v${ver.join('.')} — แพ็กรวมสกิน ISEKAI ${MERGE_MARK}`, ``,
+      `รวมจาก: ${merge.packs.map(p => `${cleanName(p.name)} v${p.ver.join('.')}`).join(', ')}`,
+      `ในโลก: ปิดแพ็กเดิมที่รวมไปแล้วออก แล้วเปิดแพ็กนี้แทน (ไอดีไอเทมเดิมทุกตัว)`, ``, `ไอเทม:`, ...readme, ``,
+      `สำหรับคนแก้ต่อ: รวมด้วยเมนูรวมแอดออนของเว็บ ISEKAI • รหัส ${P.code} • อยากเพิ่ม = ใส่ไฟล์นี้ + ไฟล์ใหม่ แล้วรวมอีกครั้ง (ไอดีแพ็กเดิม เวอร์ชัน +1)`].join('\n');
+    for(const p of [BP, RP]) files.push({ path: p + 'README.txt', data: txt });
+    const errs = checkFiles(files);
+    if(errs.length) return show(msg, 'err', 'ตรวจไม่ผ่าน ยังไม่สร้างไฟล์:<br>' + errs.map(esc).join('<br>'));
+    const zip = new JSZip(); for(const f of files) zip.file(f.path, f.data);
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const fname = `${fileSafe(name) || 'ISEKAI'}_merge_v${ver[0]}.${IN_CLAUDE ? 'zip' : 'mcaddon'}`;   // _merge กันชื่อซ้ำกับไฟล์สกินปกติ
+    if(IN_CLAUDE){
+      const dl = await claude.use('downloads').catch(() => null);
+      if(!dl) return show(msg, 'err', 'หน้านี้ส่งไฟล์ดาวน์โหลดไม่ได้ในมุมมองนี้');
+      try{ await dl.save({ filename: fname, data: blob }); }
+      catch(e){ if(e && (e.code === 'declined' || e.code === 'rate_limited')) return show(msg, 'err', 'ยังไม่ได้บันทึก กดรวมใหม่ได้'); throw e; }
+    } else saveBlob(new Blob([blob], { type: 'application/octet-stream' }), fname);
+    show(msg, 'ok', `รวมเสร็จ ตรวจผ่านทุกข้อ ได้ไฟล์ <b>${esc(fname)}</b> (${Object.keys(pick).length} ไอเทม, เวอร์ชัน ${ver.join('.')})` +
+      (dup.length ? `<br><span class="note">ไอเทมซ้ำ ${dup.length} ชิ้น เก็บจากไฟล์เวอร์ชันใหม่กว่า</span>` : '') +
+      `<br><span class="note">ในโลก: ปิดแพ็กเดิมที่รวมไปแล้วออก แล้วเปิดแพ็กรวมแทน${old ? ' • แพ็กรวมเดิมนำเข้าทับได้เลย' : ''}</span>`);
+  }catch(e){ show(msg, 'err', 'รวมไม่สำเร็จ: ' + esc(e && (e.message || e.code) || e)); }
+  finally{ btn.disabled = merge.packs.length < 2; }
+};
 // namespace: พิมพ์แล้วตรวจทันที ใช้ได้ = บันทึก + อัปเดตคำสั่ง /give, ใช้ไม่ได้ = ขอบแดง + บอกเหตุผล
 $('nsIn').addEventListener('input', () => {
   const v = $('nsIn').value.trim().toLowerCase(), ok = validNs(v);
