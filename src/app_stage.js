@@ -476,19 +476,24 @@ function attachBB(s, bb){ s.bb = { bones: sanitizeBones(bb.bones), texW: bb.texW
 async function faceCanvas(s, size, bg){
   const img = await loadImg(s.dataUrl);
   const k = img.width / 64;
-  const src = document.createElement('canvas'); src.width = src.height = Math.round(8*k);
-  const g = src.getContext('2d'); g.imageSmoothingEnabled = false;
-  if(s.kind === 'outfit'){   // ชุด: ไอคอนเป็นหน้าอก (ตัวด้านหน้า 8×12 + ชั้นนอก) วางกลางช่องสี่เหลี่ยม
-    g.drawImage(img, 20*k, 20*k, 8*k, 12*k, 1.33*k, 0, 5.33*k, 8*k);
-    g.drawImage(img, 20*k, 36*k, 8*k, 12*k, 1.33*k, 0, 5.33*k, 8*k);
+  const src = document.createElement('canvas');
+  let g;
+  if(s.kind === 'outfit'){
+    // ชุด: แปะลายตัวด้านหน้า (8×12) + เสื้อชั้นนอกทับ เต็มช่องสี่เหลี่ยม แบบเดียวกับไอคอนหน้าของสกิน (ภัทรสั่ง: ไม่เอาแขนขา ไม่ต้อง 3 มิติ)
+    src.width = Math.round(8*k); src.height = Math.round(12*k);
+    g = src.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(img, 20*k, 20*k, 8*k, 12*k, 0, 0, 8*k, 12*k);   // ตัวด้านหน้า
+    g.drawImage(img, 20*k, 36*k, 8*k, 12*k, 0, 0, 8*k, 12*k);   // เสื้อชั้นนอกทับ
   } else {
+    src.width = src.height = Math.round(8*k);
+    g = src.getContext('2d'); g.imageSmoothingEnabled = false;
     g.drawImage(img, 8*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);   // หน้า
     g.drawImage(img, 40*k, 8*k, 8*k, 8*k, 0, 0, 8*k, 8*k);  // ชั้นหมวกทับ (alpha over)
   }
   const c = document.createElement('canvas'); c.width = c.height = size;
   const o = c.getContext('2d');
   if(bg){ o.fillStyle = bg; o.fillRect(0, 0, size, size); }
-  // ย่อ = เนียน (ใกล้ LANCZOS), ขยายจากรูปเล็ก = คมแบบพิกเซล
+  // เต็มช่องสี่เหลี่ยม (ชุด 8×12 ถูกยืดให้เต็มช่อง) • ย่อ = เนียน (ใกล้ LANCZOS), ขยายจากรูปเล็ก = คมแบบพิกเซล
   o.imageSmoothingEnabled = src.width > size; o.imageSmoothingQuality = 'high';
   o.drawImage(src, 0, 0, size, size);
   return c;
