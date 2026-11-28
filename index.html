@@ -764,7 +764,7 @@ function loadLocal(){
     state.skins.forEach(s => { if(s.bb && s.bb.bones) sanitizeBones(s.bb.bones); delete s.fx; if(!/\p{L}/u.test(s.name || '')) s.name = ''; s.attach = cleanAttach(s);
       if(s.special && s.parts && s.parts.body === false && s.parts.arms === false && s.parts.legs === false && !s.partsByUser) s.parts = undefined;   // v29: ส่วนที่ระบบเคยปิดเอง เปิดคืน
       s.jacketHead = s.jacketHead === true; s.adj = cleanAdj(s);
-      s.kind = s.kind === 'outfit' ? 'outfit' : 'skin';   // สกินจากรุ่นก่อน v34 = สกิน (ไม่เปลี่ยนผลเดิม)
+      s.kind = s.kind === 'outfit' ? 'outfit' : 'skin'; s.kindByUser = s.kindByUser === true;   // สกินจากรุ่นก่อน v34 = สกิน (ไม่เปลี่ยนผลเดิม)
       if(typeof s.tryOn !== 'string') delete s.tryOn; });   // ชื่อ bone ของสกินที่จำไว้จากรุ่นก่อน • ล้างค่าฟังชั่นเก่า (ตัดระบบออกแล้ว)
     const p = d.project;
     const isU = u => typeof u === 'string' && /^[0-9a-f-]{36}$/i.test(u);
@@ -929,11 +929,44 @@ function parseBBModel(text){
   const safe = n => String(n || 'bone').replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+|_+$/g,'').slice(0, 40) || 'bone';
   const boneFor = {}; // ชื่อ bone มาตรฐาน → object
   const stdBone = new Map(); // กลุ่มมาตรฐาน (Head/Body/…) → ชิ้นเพิ่มเติมที่แยกออกมาแล้ว {ชื่อ: bone}
+  // v36: รูปหลายรูปในไฟล์เดียว — หน้าแต่ละหน้าอ้างรูปด้วยเลขลำดับ (หรือ uuid) → จำไว้ใน c._tex ให้ bakeBB รวมเป็นรูปเดียว
+  const texList = Array.isArray(bb.textures) ? bb.textures.filter(t => t && typeof t === 'object') : [];
+  const texIdx = ref => {
+    if(typeof ref === 'number' && Number.isInteger(ref) && ref >= 0 && ref < texList.length) return ref;
+    if(typeof ref === 'string'){ const i = texList.findIndex(t => t.uuid === ref); if(i >= 0) return i; }
+    return 0;
+  };
+  // mesh (Blockbench โหมดอิสระ) → poly_mesh ของ Bedrock: หมุน/ย้ายจุดตามชิ้น แล้วกลับแกน x ให้ตรงกับกล่อง
+  const rotV = (v, r) => {   // หมุนแบบ Blockbench (ลำดับ ZYX: หมุน X ก่อน แล้ว Y แล้ว Z)
+    let [x, y, z] = v; const [ax, ay, az] = r.map(d => d * Math.PI / 180);
+    [y, z] = [y*Math.cos(ax) - z*Math.sin(ax), y*Math.sin(ax) + z*Math.cos(ax)];
+    [x, z] = [x*Math.cos(ay) + z*Math.sin(ay), -x*Math.sin(ay) + z*Math.cos(ay)];
+    [x, y] = [x*Math.cos(az) - y*Math.sin(az), x*Math.sin(az) + y*Math.cos(az)];
+    return [x, y, z];
+  };
+  const toMesh = e => {
+    if(e.export === false || !e.vertices || typeof e.vertices !== 'object' || !e.faces || typeof e.faces !== 'object') return null;
+    const o = v3(e.origin), r = v3(e.rotation), keys = Object.keys(e.vertices);
+    if(keys.length > 20000) return null;
+    const at = {}, pos = [];
+    for(const k of keys){ const v = rotV(v3(e.vertices[k]), r); at[k] = pos.length; pos.push([r4(-(v[0] + o[0])), r4(v[1] + o[1]), r4(v[2] + o[2])]); }
+    const polys = [];
+    for(const f of Object.values(e.faces)){
+      if(!f || !Array.isArray(f.vertices) || f.texture === null || f.texture === false) continue;
+      let vs = f.vertices.filter(k => k in at);
+      if(vs.length !== 3 && vs.length !== 4) continue;          // หน้าเกิน 4 มุม Bedrock ไม่รองรับ ข้าม
+      if(vs.length === 4) vs = quadOrder(vs.map(k => pos[at[k]])).map(i => vs[i]);
+      const uv = vs.map(k => (f.uv && Array.isArray(f.uv[k])) ? f.uv[k].map(num) : [0,0]);
+      polys.push({ p: vs.map(k => at[k]), uv, tex: texIdx(f.texture) });   // ลำดับมุมตามที่เรียงแล้ว (แบบปลั๊กอิน Meshy ที่ใช้กับ Bedrock ได้จริง)
+    }
+    if(!polys.length) return null;
+    return { name: safe(e.name), pivot: [r4(-o[0]), r4(o[1]), r4(o[2])], _mesh: { pos, polys } };
+  };
 
   // แปลงชิ้นเดียว
   const toCube = e => {
     // ชนิดที่ไม่ใช่กล่อง: mesh ใช้ในสกิน Bedrock ไม่ได้ (เตือน) • locator/null_object/อื่นๆ ไม่มีรูปร่าง ข้ามเงียบๆ
-    if(e.type && e.type !== 'cube'){ if(e.type === 'mesh') warns.push(`ข้ามชิ้น "${safe(e.name)}" (เป็น mesh ใช้ในสกิน Bedrock ไม่ได้)`); return null; }
+    if(e.type && e.type !== 'cube') return null;   // mesh แปลงแยกใน toMesh • locator/null_object ไม่มีรูปร่าง ข้าม
     if(e.export === false) return null;   // v32: ชิ้นที่ซ่อนไว้ในหน้าจอ Blockbench (ปิดรูปตา) ยังต้องใส่ — Blockbench เองก็ export ให้ ข้ามเฉพาะชิ้นที่ปิด Export
     const f = v3(e.from), t = v3(e.to);
     const c = { origin: [r4(-t[0]), r4(f[1]), r4(f[2])], size: [r4(t[0]-f[0]), r4(t[1]-f[1]), r4(t[2]-f[2])] };
@@ -941,6 +974,8 @@ function parseBBModel(text){
     if(isBox){
       c.uv = Array.isArray(e.uv_offset) ? [num(e.uv_offset[0]), num(e.uv_offset[1])] : [0,0];
       if(e.mirror_uv) c.mirror = true;
+      const ft = e.faces && Object.values(e.faces).find(fc => fc && fc.texture !== null && fc.texture !== undefined && fc.texture !== false);
+      c._tex = texIdx(ft ? ft.texture : 0);
       // v32: ระนาบแนวตั้ง (หนา 0) ที่ลายแบบกล่องล้นขอบรูป (เช่น ผมแผ่นกว้าง 17 ช่อง หน้าหลังเลยขอบขวา)
       //   → แปลงเป็นลายรายหน้า เก็บเฉพาะหน้าที่อยู่ในรูปทั้งหมด (หน้าหน้ายังอยู่ เกมวาดสองด้านให้เอง) ไม่งั้นเกมดึงลายส่วนอื่นมาโชว์ด้านหลัง
       const [w, h, d] = c.size, [u, v] = c.uv;
@@ -951,15 +986,17 @@ function parseBBModel(text){
           if(fw <= 0 || fh <= 0 || fu < 0 || fv < 0 || fu + fw > resW + 0.01 || fv + fh > resH + 0.01) continue;
           pf[k] = c.mirror ? { uv:[r4(fu + fw), r4(fv)], uv_size:[-fw, fh] } : { uv:[r4(fu), r4(fv)], uv_size:[fw, fh] };
         }
-        if(Object.keys(pf).length){ c.uv = pf; delete c.mirror; warns.push(`ชิ้น "${safe(e.name)}" ลายล้นขอบรูป ตัดด้านที่ล้นออก (เหลือด้านที่อยู่ในรูป)`); }
+        if(Object.keys(pf).length){ c.uv = pf; delete c.mirror; c._tex = Object.fromEntries(Object.keys(pf).map(k => [k, c._tex])); warns.push(`ชิ้น "${safe(e.name)}" ลายล้นขอบรูป ตัดด้านที่ล้นออก (เหลือด้านที่อยู่ในรูป)`); }
       }
     } else {
-      c.uv = {};
+      c.uv = {}; c._tex = {}; c._rot = {};
       for(const side of ['north','south','east','west','up','down']){
         const fc = e.faces && e.faces[side];
-        if(!fc || fc.texture === null || !Array.isArray(fc.uv)) continue;
+        if(!fc || fc.texture === null || fc.texture === false || !Array.isArray(fc.uv)) continue;
         const [a,b,cx,d] = fc.uv.map(num);
         c.uv[side] = { uv:[r4(a), r4(b)], uv_size:[r4(cx-a), r4(d-b)] };
+        c._tex[side] = texIdx(fc.texture);
+        const fr = num(fc.rotation); if([90,180,270].includes(fr)) c._rot[side] = fr;   // หมุนลายบนหน้า → bakeBB วาดลายหมุนลงรูปใหม่
       }
       if(!Object.keys(c.uv).length) return null;
     }
@@ -976,6 +1013,7 @@ function parseBBModel(text){
   const walk = (node, parentBone) => {
     if(typeof node === 'string'){ // ชิ้นในกลุ่ม
       const e = byUuid[node]; if(!e) return;
+      if(e.type === 'mesh'){ const m = toMesh(e); if(m){ m.name = uniq(m.name === 'cube' || m.name === 'mesh' ? 'mesh' : m.name); if(parentBone) m.parent = parentBone.name; bones.push(m); } return; }
       const c = toCube(e); if(!c) return;
       if(parentBone && stdBone.has(parentBone) && !STD_EL[String(e.name || '').toLowerCase().trim()]){
         // ชิ้นเพิ่มเติมที่วางตรงๆ ในกลุ่มมาตรฐาน (เช่น ผมที่วางในกลุ่ม Body) → แยกเป็น bone ลูกของส่วนนั้น
@@ -1022,18 +1060,20 @@ function parseBBModel(text){
     }
   };
   if(Array.isArray(bb.outliner) && bb.outliner.length) for(const n of bb.outliner) walk(n, null);
-  else for(const e of bb.elements){ const c = toCube(e); if(c) placeLoose(e, c); }
+  else for(const e of bb.elements){ if(e && e.type === 'mesh'){ const m = toMesh(e); if(m){ m.name = uniq(m.name); bones.push(m); } continue; } const c = toCube(e); if(c) placeLoose(e, c); }
   // ชิ้นที่ไม่อยู่ใน outliner เลย (ไฟล์บางแบบ)
   const inTree = new Set(); const mark = n => { if(typeof n === 'string') inTree.add(n); else if(n && Array.isArray(n.children)) n.children.forEach(mark); };
   (bb.outliner || []).forEach(mark);
-  if(Array.isArray(bb.outliner) && bb.outliner.length) for(const e of bb.elements) if(e && !inTree.has(e.uuid)){ const c = toCube(e); if(c) placeLoose(e, c); }
+  if(Array.isArray(bb.outliner) && bb.outliner.length) for(const e of bb.elements) if(e && !inTree.has(e.uuid)){
+    if(e.type === 'mesh'){ const m = toMesh(e); if(m){ m.name = uniq(m.name); bones.push(m); } continue; }
+    const c = toCube(e); if(c) placeLoose(e, c); }
 
   // ผมติดกับหัวแบบแข็ง: กระดูกที่ไม่ใช่ส่วนมาตรฐาน ไม่มี parent และมีชิ้นสูงเกินคอ (y > 24) → ผูกกับหัว
   //   (หันหัว/ก้มเงย ผมไปด้วย) ชิ้นที่อยู่ต่ำกว่าคอทั้งหมด (เช่น หาง) ยังตามตัวเหมือนเดิม
   const stdNames = new Set(Object.values(STD));
   for(const b of bones){
     if(b.parent || stdNames.has(b.name)) continue;
-    const top = Math.max(-Infinity, ...(b.cubes || []).map(c => c.origin[1] + c.size[1] + (c.inflate || 0)));
+    const top = Math.max(-Infinity, ...(b.cubes || []).map(c => c.origin[1] + c.size[1] + (c.inflate || 0)), ...((b._mesh && b._mesh.pos) || []).map(p => p[1]));
     if(top > 24) b.parent = 'head';
   }
   // ตัด bone ว่าง (ไม่มีชิ้น ไม่มีลูก) ทิ้ง ยกเว้น head
@@ -1041,26 +1081,129 @@ function parseBBModel(text){
     again = false;
     for(let i = bones.length - 1; i >= 0; i--){
       const b = bones[i];
-      if(b.name !== 'head' && !(b.cubes && b.cubes.length) && !bones.some(x => x.parent === b.name)){ bones.splice(i, 1); again = true; }
+      if(b.name !== 'head' && !(b.cubes && b.cubes.length) && !b._mesh && !bones.some(x => x.parent === b.name)){ bones.splice(i, 1); again = true; }
     }
   }
-  if(!bones.some(b => b.cubes && b.cubes.length)) throw new Error('ไม่พบชิ้นส่วนที่ใช้ได้ในไฟล์ .bbmodel');
+  if(!bones.some(b => (b.cubes && b.cubes.length) || b._mesh)) throw new Error('ไม่พบชิ้นส่วนที่ใช้ได้ในไฟล์ .bbmodel');
+  if(bones.some(b => b._mesh)) warns.push('มีชิ้นแบบ mesh (รูปทรงอิสระ) — แปลงให้แล้วแบบทดลอง ช่วยเช็กในเกมว่าลายถูกไหม');
   if(!boneFor.head) { bones.unshift({ name: uniq('head'), pivot: [0,24,0] }); } // ต้องมี bone head เสมอ (geometry none ก็ใช้)
   // เท็กซ์เจอร์ที่ฝังในไฟล์ (ใช้เมื่อผู้ใช้ไม่ได้ใส่ .png คู่กัน)
-  let tex = null;
-  const t0 = Array.isArray(bb.textures) && bb.textures[0];
-  if(t0 && typeof t0.source === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(t0.source)) tex = t0.source;
-  return { bones, texW: resW, texH: resH, tex, warns };
+  //   (รูปที่ใช้จริงหลายรูป / หน้าหมุนลาย → bakeBB รวมเป็นรูปเดียวทีหลัง)
+  const srcOf = t => (t && typeof t.source === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.source)) ? t.source : null;
+  const texs = texList.map(t => ({ src: srcOf(t), uvW: num(t.uv_width) || resW, uvH: num(t.uv_height) || resH, name: String(t.name || '') }));
+  return { bones, texW: resW, texH: resH, tex: (texs[0] && texs[0].src) || null, texs, warns };
+}
+// เรียงมุมของหน้า 4 มุมให้เป็นสี่เหลี่ยมไม่ไขว้กัน (Blockbench เก็บมุม mesh แบบไม่เรียง) → คืนลำดับเลข 0-3
+function quadOrder(P){
+  const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]], cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  for(const o of [[0,1,2,3],[0,1,3,2],[0,2,1,3]]){
+    const q = o.map(i => P[i]);
+    const n1 = cross(sub(q[1], q[0]), sub(q[2], q[0])), n2 = cross(sub(q[2], q[0]), sub(q[3], q[0]));
+    const n3 = cross(sub(q[2], q[1]), sub(q[3], q[1])), n4 = cross(sub(q[3], q[2]), sub(q[0], q[2]));
+    if(dot(n1, n2) >= 0 && dot(n3, n4) >= 0) return o;
+  }
+  return [0,1,2,3];
+}
+// v36: รวมรูปหลายรูป + วาดลายหน้าที่หมุนลงรูปใหม่ → ได้รูปเดียวที่เกมใช้ได้ (Bedrock ใช้ได้รูปเดียวต่อโมเดล)
+//   วางรูปซ้อนลงมาทีละรูป (หน่วยเดียวกับ UV) แล้วต่อด้วยช่องลายหมุนข้างล่าง • ปรับ uv ของทุกหน้าตามตำแหน่งใหม่
+async function bakeBB(p){
+  const used = new Set(), rotFaces = [];
+  for(const b of p.bones){
+    for(const c of (b.cubes || [])){
+      if(typeof c._tex === 'number') used.add(c._tex);
+      else if(c._tex) for(const [side, t] of Object.entries(c._tex)){ used.add(t); if(c._rot && c._rot[side]) rotFaces.push({ c, side, t, rot: c._rot[side] }); }
+    }
+    if(b._mesh) for(const pl of b._mesh.polys) used.add(pl.tex);
+  }
+  if(!used.size) used.add(0);
+  const list = [...used].sort((a, b) => a - b);
+  const T = i => p.texs[i] || { src: null, uvW: p.texW, uvH: p.texH };
+  if(list.length === 1 && !rotFaces.length){   // รูปเดียว ไม่มีหน้าหมุน: ใช้รูปนั้นตรงๆ (อาจไม่ใช่รูปแรกของไฟล์)
+    const t = T(list[0]); if(t.src) p.tex = t.src; p.texW = t.uvW; p.texH = t.uvH; return;
+  }
+  const missing = list.filter(i => !T(i).src);
+  if(missing.length){ p.warns.push(`มีรูป ${missing.length} รูปที่ไม่ได้ฝังในไฟล์ (บันทึก .bbmodel ใหม่ใน Blockbench ให้ฝังรูปด้วย) — ส่วนที่ใช้รูปนั้นอาจลายเพี้ยน`); }
+  const imgs = {};
+  for(const i of list) if(T(i).src) imgs[i] = await loadImg(T(i).src);
+  // ความละเอียด: พิกเซลต่อ 1 หน่วย UV ของรูปที่ละเอียดสุด
+  let dens = Math.max(1, ...list.filter(i => imgs[i]).map(i => imgs[i].width / T(i).uvW));
+  const W = Math.max(...list.map(i => T(i).uvW)), off = {}; let H = 0;
+  for(const i of list){ off[i] = H; H += T(i).uvH; }
+  // ช่องลายหมุน: วางเรียงแถวต่อท้าย
+  const rects = []; let rx = 0, ry = H, rowH = 0;
+  for(const f of rotFaces){
+    const [w0, h0] = f.c.uv[f.side].uv_size.map(Math.abs), sw = f.rot % 180 ? h0 : w0, sh = f.rot % 180 ? w0 : h0;
+    if(rx + sw > W){ rx = 0; ry += rowH; rowH = 0; }
+    rects.push({ ...f, x: rx, y: ry, w: sw, h: sh }); rx += sw; rowH = Math.max(rowH, sh);
+  }
+  H = ry + rowH;
+  if(Math.max(W, H) * dens > 4096) dens = 4096 / Math.max(W, H);
+  const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(W * dens)); cv.height = Math.max(1, Math.round(H * dens));
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  for(const i of list) if(imgs[i]) g.drawImage(imgs[i], 0, off[i] * dens, T(i).uvW * dens, T(i).uvH * dens);
+  for(const r of rects){
+    const im = imgs[r.t]; if(!im) continue;
+    const t = T(r.t), sx = im.width / t.uvW, sy = im.height / t.uvH;
+    const { uv: [u, v], uv_size: [w, h] } = r.c.uv[r.side];
+    g.save(); g.translate((r.x + r.w / 2) * dens, (r.y + r.h / 2) * dens); g.rotate(r.rot * Math.PI / 180);   // หมุนตามเข็ม (แบบ Blockbench)
+    g.scale(w < 0 ? -1 : 1, h < 0 ? -1 : 1);
+    const aw = Math.abs(w), ah = Math.abs(h);
+    g.drawImage(im, Math.min(u, u + w) * sx, Math.min(v, v + h) * sy, aw * sx, ah * sy, -aw / 2 * dens, -ah / 2 * dens, aw * dens, ah * dens);
+    g.restore();
+    r.c.uv[r.side] = { uv: [r4(r.x), r4(r.y)], uv_size: [r4(r.w), r4(r.h)] }; r.c._done = r.c._done || {}; r.c._done[r.side] = true;
+  }
+  // เลื่อน uv ทุกหน้าไปตำแหน่งรูปของมันในรูปรวม
+  for(const b of p.bones){
+    for(const c of (b.cubes || [])){
+      if(typeof c._tex === 'number') c.uv = [c.uv[0], r4(c.uv[1] + off[c._tex])];
+      else if(c._tex) for(const [side, t] of Object.entries(c._tex)) if(!(c._done && c._done[side]) && c.uv[side]) c.uv[side].uv = [c.uv[side].uv[0], r4(c.uv[side].uv[1] + off[t])];
+      delete c._done;
+    }
+    if(b._mesh) for(const pl of b._mesh.polys) pl.uv = pl.uv.map(([u, v]) => [u, r4(v + off[pl.tex])]);
+  }
+  p.tex = cv.toDataURL('image/png'); p.texW = W; p.texH = H; p.forceTex = true;
+  if(list.length > 1) p.warns.push(`รวมรูป ${list.length} รูปในไฟล์เป็นรูปเดียวให้แล้ว`);
+}
+// ล้างค่าชั่วคราว + สร้าง poly_mesh จริงจาก mesh
+//   ตามแบบปลั๊กอิน Meshy (ส่งออก mesh ไป Bedrock ได้จริง): uv = สัดส่วน 0-1 และกลับแกน v (1 - v/สูง) • ตำแหน่งกลับแกน x
+//   หน้า 3 มุม → เติมมุมแรกซ้ำเป็น 4 มุม (บั๊กเกม MCPE-186053: หน้า 3 มุมเกมวาดเพี้ยน/ไม่วาด)
+function finishBB(p){
+  for(const b of p.bones){
+    for(const c of (b.cubes || [])){ delete c._tex; delete c._rot; }
+    if(b._mesh){
+      const { pos, polys } = b._mesh, normals = [], uvs = [], out = [];
+      for(const pl of polys){
+        const q = pl.p.map(i => [-pos[i][0], pos[i][1], pos[i][2]]);   // คิดทิศหน้าในแกนของ Blockbench แล้วค่อยกลับ x
+        let n = [0,0,0];
+        for(let i = 0; i < q.length; i++){ const a = q[i], c = q[(i + 1) % q.length]; n[0] += (a[1]-c[1])*(a[2]+c[2]); n[1] += (a[2]-c[2])*(a[0]+c[0]); n[2] += (a[0]-c[0])*(a[1]+c[1]); }
+        const L = Math.hypot(...n) || 1; normals.push([r4(-n[0] / L), r4(n[1] / L), r4(n[2] / L)]); const ni = normals.length - 1;
+        const vs = pl.p.map((pi, k) => { uvs.push([r4(pl.uv[k][0] / p.texW), r4(1 - pl.uv[k][1] / p.texH)]); return [pi, ni, uvs.length - 1]; });
+        if(vs.length === 3) vs.push(vs[0]);                       // สามเหลี่ยม = สี่เหลี่ยมที่มุมแรกซ้ำ
+        out.push(vs);
+      }
+      b.poly_mesh = { normalized_uvs: true, positions: pos, normals, uvs, polys: out };
+      delete b._mesh;
+    }
+  }
+  return p;
 }
 function stdPivot(n){ return ({ waist:[0,12,0], head:[0,24,0], body:[0,24,0], rightArm:[-5,22,0], leftArm:[5,22,0], rightLeg:[-1.9,12,0], leftLeg:[1.9,12,0] })[n]; }
 
 /* =====================================================================
    รับไฟล์
    ===================================================================== */
-async function makeSkinFromImage(name, url){
+async function makeSkinFromImage(name, url, opt = {}){
   let img = await loadImg(url);
-  const okSize = (img.width === img.height && [64,128,256,512,1024,2048].includes(img.width)) || (img.width === 64 && img.height === 32);
-  if(!okSize) throw new Error(`ขนาด ${img.width}×${img.height} ไม่ใช่สกิน (ต้องจัตุรัส 64–2048 หรือ 64×32)`);
+  const skinSize = (img.width === img.height && [64,128,256,512,1024,2048].includes(img.width)) || (img.width === 64 && img.height === 32);
+  // คู่กับ .bbmodel: รูปตามโมเดล ขนาดไหนก็ได้ (เช่น 128×64, 32×32) • สกินล้วน: ต้องเป็นขนาดสกิน
+  if(opt.bb){ if(img.width < 4 || img.height < 4 || img.width > 4096 || img.height > 4096) throw new Error(`ขนาดรูป ${img.width}×${img.height} ใช้ไม่ได้ (4–4096)`); }
+  else if(!skinSize) throw new Error(`ขนาด ${img.width}×${img.height} ไม่ใช่สกิน (ต้องจัตุรัส 64–2048 หรือ 64×32)`);
+  if(opt.bb && !skinSize){   // รูปของโมเดล ไม่ใช่ลายสกิน: ไม่ต้องวิเคราะห์ลายสกิน
+    const u = canvasOf(img).toDataURL('image/png');
+    return { id: Date.now() + '_' + Math.random().toString(36).slice(2,7), k: nextK(), name: cleanName(name), model: 'auto', slimAuto: false,
+             has: {}, extra: 0, special: '', parts: undefined, dataUrl: u, px: img.width, pxH: img.height, bb: null, bbName: '', kind: 'skin' };
+  }
   if(img.height === 32 && img.width === 64){ url = upgradeLegacy(img); img = await loadImg(url); }
   else url = canvasOf(img).toDataURL('image/png'); // วาดใหม่ให้เป็น png สะอาด
   const a = analyse(img);
@@ -1097,17 +1240,20 @@ async function addFiles(files){
   for(const f of bbs){
     try{
       if(f.size > MAX_BB) throw new Error('ไฟล์ใหญ่เกิน 40MB');
-      const p = parseBBModel(await readAs(f, 'text'));
-      p.file = f.name; bbMap[baseName(f.name)] = p;
+      const p = await loadBB(f);
+      bbMap[baseName(f.name)] = p;
       p.warns.forEach(w => warns.push(`${esc(f.name)}: ${esc(w)}`));
     }catch(e){ msgs.push(`${esc(f.name)}: ${esc(e.message)}`); }
   }
   for(const f of pngs){
     try{
       if(f.size > MAX_PNG) throw new Error('ไฟล์ใหญ่เกิน 24MB');
-      const s = await makeSkinFromImage(autoName(f.name), await readAs(f));
       const bb = bbMap[baseName(f.name)];
-      if(bb){ attachBB(s, bb); delete bbMap[baseName(f.name)]; }
+      // คู่กับ .bbmodel: รูปขนาดไหนก็ได้ตามโมเดล • ถ้าโมเดลมีหลายรูป/หน้าหมุนลาย ใช้รูปรวมที่ทำจากในไฟล์แทน png
+      const useBB = bb && bb.forceTex && bb.tex;
+      if(useBB) warns.push(`${esc(f.name)}: โมเดลใช้หลายรูป ใช้รูปรวมจากในไฟล์ .bbmodel แทน`);
+      const s = await makeSkinFromImage(autoName(f.name), useBB ? bb.tex : await readAs(f), { bb: !!bb });
+      if(bb){ attachBB(s, bb); bbKind(s); delete bbMap[baseName(f.name)]; }
       state.skins.push(s); added++;
     }catch(e){ msgs.push(`${esc(f.name)}: ${esc(e.message)}`); }
   }
@@ -1115,8 +1261,8 @@ async function addFiles(files){
   for(const [k, bb] of Object.entries(bbMap)){
     try{
       if(!bb.tex) throw new Error('ไม่มีรูปสกินในไฟล์ ใส่ .png ชื่อเดียวกันมาด้วย');
-      const s = await makeSkinFromImage(autoName(bb.file), bb.tex);
-      attachBB(s, bb); state.skins.push(s); added++;
+      const s = await makeSkinFromImage(autoName(bb.file), bb.tex, { bb: true });
+      attachBB(s, bb); bbKind(s); state.skins.push(s); added++;
     }catch(e){ msgs.push(`${esc(bb.file)}: ${esc(e.message)}`); }
   }
   if(added) state.selected = state.skins.length - 1;
@@ -1143,12 +1289,57 @@ function sanitizeBones(bones){
   for(const b of bones) if(b.parent && rename.has(b.parent)) b.parent = rename.get(b.parent);
   return bones;
 }
+// อ่าน .bbmodel ครบขั้น: แยกชิ้น → รวมรูป/หมุนลาย → สร้าง poly_mesh
+async function loadBB(f){
+  const p = parseBBModel(await readAs(f, 'text')); p.file = f.name;
+  await bakeBB(p); return finishBB(p);
+}
 function attachBB(s, bb){ s.bb = { bones: sanitizeBones(bb.bones), texW: bb.texW, texH: bb.texH }; s.bbName = bb.file; s.attach = {}; s.adj = {}; }   // ไฟล์ใหม่ = ล้างการเลือกติดเดิม
+// สกินหรือชุด สำหรับ .bbmodel: มีชิ้นที่ส่วนหัว = สกิน • ไม่มีเลย = ชุด (ถ้าผู้ใช้เลือกเองแล้ว ไม่เปลี่ยนให้)
+function bbKind(s){
+  if(s.kindByUser || !s.bb) return;
+  const bones = s.bb.bones, under = n => { for(let b = bones.find(x => x.name === n); b; b = bones.find(x => x.name === b.parent)) if(b.name === 'head') return true; return false; };
+  s.kind = bones.some(b => ((b.cubes && b.cubes.length) || b.poly_mesh) && under(b.name)) ? 'skin' : 'outfit';
+}
 
 /* =====================================================================
    ไอคอน (สูตรข้อ 2.6): หน้าหัว (uv 8,8) + หน้าชั้นหมวก (uv 40,8) ซ้อนแบบ alpha → ย่อเนียน
    ===================================================================== */
+// v36: ไอคอนจากโมเดล 3 มิติ — ใช้กับ .bbmodel ที่รูปไม่ใช่ลายสกินมาตรฐาน (ตัดหน้าจากรูปไม่ได้) เช่น รูป UV 256 / ชุดจากโมเดล
+//   สกิน = ถ่ายส่วนหัวจากด้านหน้า • ชุด = ถ่ายทั้งตัว • กล้องแบบตั้งฉาก วาดลงผ้าใบขนาด size
+let iconR = null;
+async function modelIcon(s, size){
+  if(!window.THREE) return null;
+  try{
+    iconR = iconR || new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true });
+    iconR.setPixelRatio(1); iconR.setSize(size, size);
+    const img = await loadImg(s.dataUrl), tex = new THREE.Texture(img);
+    tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true });
+    const scene = new THREE.Scene(), root = new THREE.Group(); root.scale.set(1, 1, -1); scene.add(root);
+    const keep = [V.root, V.list]; V.root = root; V.list = [];
+    try{ addGeo(geometryOf(s), mat); } finally { var parts = V.list; [V.root, V.list] = keep; }
+    root.updateMatrixWorld(true);
+    let box = new THREE.Box3();
+    const head = parts.find(it => it.name === 'head');
+    if(s.kind !== 'outfit' && head) box.setFromObject(head.g);
+    if(box.isEmpty()) box.setFromObject(root);
+    if(box.isEmpty()) return null;
+    const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), h = Math.max(sz.x, sz.y) / 2 * 1.08 || 1;
+    const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.1, 1000); cam.position.set(c.x, c.y, c.z + 200); cam.lookAt(c);
+    iconR.setClearColor(0x000000, 0); iconR.render(scene, cam);
+    const out = document.createElement('canvas'); out.width = out.height = size; out.getContext('2d').drawImage(iconR.domElement, 0, 0, size, size);
+    scene.traverse(o => { if(o.geometry) o.geometry.dispose(); }); mat.dispose(); tex.dispose();
+    return out;
+  }catch(e){ return null; }
+}
+const needsModelIcon = s => !!s.bb && (s.kind === 'outfit' || s.bb.texW !== 64 || s.bb.texH !== 64);
 async function faceCanvas(s, size, bg){
+  if(needsModelIcon(s)){
+    const mi = await modelIcon(s, size);
+    if(mi){ const c = document.createElement('canvas'); c.width = c.height = size; const o = c.getContext('2d');
+      if(bg){ o.fillStyle = bg; o.fillRect(0, 0, size, size); } o.drawImage(mi, 0, 0); return c; }
+  }
   const img = await loadImg(s.dataUrl);
   const k = img.width / 64;
   const src = document.createElement('canvas');
@@ -1221,6 +1412,20 @@ function cubeMesh(c, texW, texH, pivot, mat, gray){
   g.setIndex(idx);
   return new THREE.Mesh(g, mat);
 }
+// poly_mesh (ชิ้นรูปทรงอิสระ) → three: หน้าละ 4 มุม แบ่งเป็นสามเหลี่ยม 2 อัน • uv เป็นสัดส่วนนับจากล่าง (ตรงกับ three)
+function polyMeshObj(pm, pivot, mat){
+  const pos = [], uvs = [], col = [];
+  for(const poly of (pm.polys || [])){
+    const vs = poly.map(([pi, , ui]) => ({ p: pm.positions[pi] || [0,0,0], u: pm.uvs[ui] || [0,0] }));
+    const tris = vs.length === 4 ? [[0,1,2],[0,2,3]] : [[0,1,2]];   // มุมซ้ำ = สามเหลี่ยมแบน ไม่เห็น ไม่เป็นไร
+    for(const t of tris) for(const i of t){ const v = vs[i]; pos.push(v.p[0]-pivot[0], v.p[1]-pivot[1], v.p[2]-pivot[2]); uvs.push(v.u[0], v.u[1]); col.push(0.9, 0.9, 0.9); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return new THREE.Mesh(g, mat);
+}
 const deg = Math.PI / 180;
 function setRot(obj, r){ obj.rotation.set(-(r[0]||0)*deg, -(r[1]||0)*deg, (r[2]||0)*deg, 'ZYX'); } // +x ของ Bedrock = ก้ม
 function initViewer(){
@@ -1256,6 +1461,7 @@ function addGeo(geo, mat){
         sub.add(cubeMesh(c, geo.texW, geo.texH, cp, mat)); g.add(sub);
       } else g.add(cubeMesh(c, geo.texW, geo.texH, b.pivot, mat));
     }
+    if(b.poly_mesh) g.add(polyMeshObj(b.poly_mesh, b.pivot, mat));
     V.list.push({ name: b.name, g, pos: g.position.clone(), rot: b.rotation || [0,0,0] });
   }
   return objs;
@@ -1283,6 +1489,17 @@ async function buildPreview(s){
   V.root = new THREE.Group(); V.root.scale.set(1, 1, -1);
   const outer = new THREE.Group(); outer.add(V.root); outer.position.y = -13; V.scene.add(outer); V.outer = outer;
   addGeo(geo, mat);
+  // v36: กล้องพอดีโมเดล — โมเดลสูง/กว้างกว่าคนปกติ (เขา ป้าย ปีก) ถอยกล้องและเลื่อนกลางจอตาม • คนปกติ = ค่าเดิม
+  { let lo = 0, hi = 32, rr = 8;
+    for(const b of geo.bones){
+      for(const c of (b.cubes || [])){ const pad = (c.inflate || 0) + (c.rotation ? Math.hypot(...c.size) / 2 : 0);
+        lo = Math.min(lo, c.origin[1] - pad); hi = Math.max(hi, c.origin[1] + c.size[1] + pad);
+        rr = Math.max(rr, Math.abs(c.origin[0]) + pad, Math.abs(c.origin[0] + c.size[0]) + pad, Math.abs(c.origin[2]) + pad, Math.abs(c.origin[2] + c.size[2]) + pad); }
+      for(const q of ((b.poly_mesh && b.poly_mesh.positions) || [])){ lo = Math.min(lo, q[1]); hi = Math.max(hi, q[1]); rr = Math.max(rr, Math.abs(q[0]), Math.abs(q[2])); }
+    }
+    const big = lo < 0 || hi > 33 || rr > 9;
+    V.outer.position.y = big ? -((lo + hi) / 2) : -13;
+    V.dist = big ? Math.max(92, (hi - lo) * 2.75, rr * 2 * 2.75) : 92; }
   // ชุด: ลองใส่ทับสกินที่เลือก (วาดสกินนั้นด้วยเท็กซ์เจอร์ของมันเอง ใต้ชุด)
   const base = s.kind === 'outfit' ? tryOnOf(s) : null;
   if(base){ addGeo(geometryOf(base), new THREE.MeshBasicMaterial({ map: texOf(base.dataUrl), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true })); }
@@ -1323,7 +1540,7 @@ function loop(now){
     setRot(it.g, [it.rot[0] + r[0], it.rot[1] + r[1], it.rot[2] + r[2]]);
   }
   V.outer.rotation.y = V.yaw;
-  const dist = 92;
+  const dist = V.dist || 92;
   V.cam.position.set(0, Math.sin(V.pitch) * dist, Math.cos(V.pitch) * dist); V.cam.lookAt(0, 0, 0);
   V.renderer.render(V.scene, V.cam);
 }
@@ -1342,7 +1559,7 @@ function modelOf(s){ return s.model === 'auto' ? (s.slimAuto ? 'slim' : 'classic
 const ATTACH = { head:'หัว', body:'ตัว', rightArm:'แขนขวา', leftArm:'แขนซ้าย', rightLeg:'ขาขวา', leftLeg:'ขาซ้าย', none:'ไม่ติด (ตามตัวผู้เล่น ไม่หันตามหัว)' };
 const STD_NAMES = new Set(Object.values(STD));
 // ชิ้นที่ผู้ใช้เลือก "ติดกับ" ได้: ทุก bone ที่ไม่ใช่ส่วนมาตรฐานของผู้เล่น
-function attachable(bones){ return (bones || []).filter(b => !STD_NAMES.has(b.name) && ((b.cubes && b.cubes.length) || bones.some(x => x.parent === b.name))); }
+function attachable(bones){ return (bones || []).filter(b => !STD_NAMES.has(b.name) && ((b.cubes && b.cubes.length) || b.poly_mesh || bones.some(x => x.parent === b.name))); }
 // ใส่ค่าที่ผู้ใช้เลือกลงโครง (ไม่แก้ของเดิม คัดลอกใหม่) — ส่วนปลายทางที่ยังไม่มีในโมเดลจะเพิ่ม bone เปล่าให้
 function applyAttach(bones, attach){
   const at = attach || {};
@@ -1381,6 +1598,7 @@ function applyAdj(bones, name, a){
     if(!kids.has(b.name)) return b;
     const nb = { ...b, pivot: mv(b.pivot) };
     if(b.cubes) nb.cubes = b.cubes.map(c => { const nc = { ...c, origin: mv(c.origin) }; if(c.pivot) nc.pivot = mv(c.pivot); return nc; });
+    if(b.poly_mesh) nb.poly_mesh = { ...b.poly_mesh, positions: b.poly_mesh.positions.map(mv) };
     if(b.name === name && a.r.some(v => v)){ const r0 = b.rotation || [0,0,0]; nb.rotation = [0,1,2].map(i => r4(r0[i] + a.r[i])); }
     return nb;
   });
@@ -1425,6 +1643,9 @@ function visibleBounds(bones){
     for(const x of [c.origin[0]-inf-pad, c.origin[0]+c.size[0]+inf+pad]) for(const z of [c.origin[2]-inf-pad, c.origin[2]+c.size[2]+inf+pad]) maxR = Math.max(maxR, Math.abs(x), Math.abs(z));
     maxY = Math.max(maxY, c.origin[1] + c.size[1] + inf + pad); minY = Math.min(minY, c.origin[1] - inf - pad);
   }
+  for(const b of bones) for(const q of ((b.poly_mesh && b.poly_mesh.positions) || [])){
+    maxR = Math.max(maxR, Math.abs(q[0]), Math.abs(q[2])); maxY = Math.max(maxY, q[1]); minY = Math.min(minY, q[1]);
+  }
   const w = Math.ceil((maxR * 2 / 16 + 0.5) * 2) / 2, top = Math.ceil((maxY / 16 + 0.25) * 2) / 2, bot = Math.floor(minY / 16 * 2) / 2;
   const h = Math.max(3, top - bot);
   return { width: Math.max(3, w), height: h, offset: [0, r4(bot + h / 2), 0] };
@@ -1458,7 +1679,7 @@ async function render(){
     const kd = document.createElement('select'); kd.setAttribute('aria-label', 'ใช้เป็น');
     kd.innerHTML = '<option value="skin">สกิน (หัว+ตัว)</option><option value="outfit">ชุด (ใส่ทับสกิน)</option>';
     kd.value = s.kind === 'outfit' ? 'outfit' : 'skin'; kd.onclick = e => e.stopPropagation();
-    kd.onchange = () => { s.kind = kd.value; if(s.kind !== 'outfit') delete s.tryOn; saveLocal(); render(); };
+    kd.onchange = () => { s.kind = kd.value; s.kindByUser = true; if(s.kind !== 'outfit') delete s.tryOn; saveLocal(); render(); };
     mid.append(kd);
     if(s.kind === 'outfit'){
       const skinsOnly = state.skins.filter(x => x.kind !== 'outfit');
@@ -1493,8 +1714,8 @@ async function render(){
     }
     const meta = document.createElement('div'); meta.className = 'meta';
     const geo = geometryOf(s);
-    const parts = geo.bones.filter(b => b.cubes && b.cubes.length).map(b => b.name);
-    meta.innerHTML = `รูป ${s.px}×${s.px} • ${s.bb ? 'โมเดล: <b>' + esc(s.bbName) + '</b>' : 'โมเดลมาตรฐาน'}<br>ชิ้น: ${esc(parts.join(', '))}`;
+    const parts = geo.bones.filter(b => (b.cubes && b.cubes.length) || b.poly_mesh).map(b => b.name);
+    meta.innerHTML = `รูป ${s.px}×${s.pxH || s.px} • ${s.bb ? 'โมเดล: <b>' + esc(s.bbName) + '</b>' : 'โมเดลมาตรฐาน'}<br>ชิ้น: ${esc(parts.join(', '))}`;
     // เตือน: สกินมีชิ้นผม/ระนาบพิเศษ แต่ยังไม่มี .bbmodel → ผมจะไปอยู่ผิดที่
     if(!s.bb && s.special && s.kind !== 'outfit'){   // แค่แนะนำ: สกินนี้น่าจะทำมาคู่กับ .bbmodel (ใส่หรือไม่ใส่ก็สร้างได้)
       const w = document.createElement('div'); w.className = 'needbb soft';
@@ -1951,8 +2172,9 @@ $('bbIn').onchange = async e => {
   if(!f || !s) return;
   try{
     if(f.size > MAX_BB) throw new Error('ไฟล์ใหญ่เกิน 40MB');
-    const p = parseBBModel(await readAs(f, 'text')); p.file = f.name;
-    attachBB(s, p); saveLocal(); await render();
+    const p = await loadBB(f);
+    if(p.forceTex && p.tex){ const ns = await makeSkinFromImage(s.name, p.tex, { bb: true }); Object.assign(s, { dataUrl: ns.dataUrl, px: ns.px, pxH: ns.pxH, has: ns.has, special: ns.special, extra: ns.extra, slimAuto: ns.slimAuto }); }   // รูปรวมจากโมเดลแทนรูปเดิม
+    attachBB(s, p); bbKind(s); saveLocal(); await render();
     show($('addMsg'), p.warns.length ? 'warn' : 'ok', `ใส่โมเดล ${esc(f.name)} ให้ ${esc(s.name)} แล้ว` + (p.warns.length ? '<br>' + p.warns.map(esc).join('<br>') : ''));
   }catch(err){ show($('addMsg'), 'err', `${esc(f.name)}: ${esc(err.message)}`); }
 };
